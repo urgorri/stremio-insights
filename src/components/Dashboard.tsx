@@ -38,15 +38,65 @@ export const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"overview" | "timeline" | "analytics" | "sync">("overview");
   const [authKey, setAuthKey] = useState("");
   const [syncSuccessMsg, setSyncSuccessMsg] = useState<string | null>(null);
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
+
+  const handleManualSyncNow = async () => {
+    setIsManualSyncing(true);
+    chrome.tabs.query({ url: "https://web.stremio.com/*" }, (stremioTabs) => {
+      if (stremioTabs && stremioTabs.length > 0) {
+        // Find the active Stremio tab if there is one, or default to the first one found
+        const targetTab = stremioTabs.find(tab => tab.active) || stremioTabs[0];
+        if (targetTab.id) {
+          chrome.tabs.sendMessage(targetTab.id, { type: "FORCE_RESCAN" }, (response) => {
+            setIsManualSyncing(false);
+            if (chrome.runtime.lastError) {
+              console.error("[Stremio Insights] Error during manual FORCE_RESCAN:", chrome.runtime.lastError);
+              alert("Could not communicate with Stremio tab. Make sure web.stremio.com is open and active.");
+            } else if (response && response.success) {
+              alert(`Successfully synchronized ${response.count} watch history records from Stremio tab!`);
+              fetchData();
+            } else {
+              alert("Sync completed, but no new records were found.");
+              fetchData();
+            }
+          });
+        } else {
+          setIsManualSyncing(false);
+          alert("Could not resolve Stremio tab ID.");
+        }
+      } else {
+        setIsManualSyncing(false);
+        alert("No open Stremio tab found. Please open https://web.stremio.com in your browser.");
+      }
+    });
+  };
 
   useEffect(() => {
     fetchData();
     // Pre-fill authKey if available in chrome storage
-    chrome.storage.local.get(["stremio_auth_key"], (res) => {
-      if (res.stremio_auth_key) {
-        setAuthKey(res.stremio_auth_key);
+    if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+      chrome.storage.local.get(["stremio_auth_key"], (res) => {
+        if (res.stremio_auth_key) {
+          setAuthKey(res.stremio_auth_key);
+        }
+      });
+    }
+
+    // Listen for real-time synchronization updates
+    const handleMessage = (msg: any) => {
+      if (msg && msg.type === "DATA_SYNCHRONIZED") {
+        console.log("[Stremio Insights Popup] Received DATA_SYNCHRONIZED. Refreshing statistics...");
+        fetchData();
       }
-    });
+    };
+    if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onMessage) {
+      chrome.runtime.onMessage.addListener(handleMessage);
+    }
+    return () => {
+      if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onMessage) {
+        chrome.runtime.onMessage.removeListener(handleMessage);
+      }
+    };
   }, [fetchData]);
 
   const handleSync = async () => {
@@ -123,7 +173,16 @@ export const Dashboard: React.FC = () => {
             Stremio Insights
           </h1>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleManualSyncNow}
+            disabled={isManualSyncing}
+            className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-md bg-purple-600 hover:bg-purple-500 text-white transition-all shadow-md ${isManualSyncing ? "opacity-60 cursor-not-allowed" : ""}`}
+            title="Scan & Sync active Stremio tab now"
+          >
+            <RefreshCw className={`w-3 h-3 ${isManualSyncing ? "animate-spin" : ""}`} />
+            <span>{isManualSyncing ? "Syncing..." : "Sync Now"}</span>
+          </button>
           <button
             onClick={() => fetchData()}
             className="p-1.5 hover:bg-gray-800 rounded transition-colors text-gray-400 hover:text-white"
