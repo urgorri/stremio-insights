@@ -106,6 +106,7 @@ function extractFromDOM(): PlaybackEvent[] {
 
     events.push({
       imdb_id: id,
+      imdbId: id,
       title,
       type,
       started_at: new Date().toISOString(),
@@ -114,7 +115,8 @@ function extractFromDOM(): PlaybackEvent[] {
       watch_count: 1,
       duration,
       time_watched,
-      genres: ["Historical"]
+      genres: ["Historical"],
+      source: "stremio"
     });
   });
 
@@ -290,14 +292,21 @@ async function discoverAndSyncData(): Promise<number> {
     }
 
     const imdb_id = item._id;
-    const started_at = state.lastWatched || new Date().toISOString();
-    const finished_at = state.lastWatched || new Date().toISOString();
+    const rawTimestamp = state.lastWatched ? new Date(state.lastWatched).getTime() : 0;
+    if (rawTimestamp === 0) {
+      // Avoid Date.now() for Stremio history imports
+      return null;
+    }
+
+    const started_at = new Date(rawTimestamp).toISOString();
+    const finished_at = new Date(rawTimestamp).toISOString();
     const duration = state.duration || 3600000;
     const time_watched = state.timeWatched || duration;
     const progress = duration > 0 ? Math.min(100, Math.round((time_watched / duration) * 100)) : 100;
 
     return {
       imdb_id,
+      imdbId: imdb_id,
       title: item.name,
       type: item.type || "movie",
       started_at,
@@ -307,7 +316,10 @@ async function discoverAndSyncData(): Promise<number> {
       duration,
       time_watched,
       genres: item.genres || ["Historical"],
-      year: state.lastWatched ? new Date(state.lastWatched).getFullYear() : undefined
+      year: new Date(rawTimestamp).getFullYear(),
+      firstWatched: rawTimestamp,
+      lastWatched: rawTimestamp,
+      source: "stremio"
     };
   };
 
