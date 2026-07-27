@@ -39,6 +39,15 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
 
   fetchData: async () => {
     return new Promise<void>((resolve) => {
+      if (typeof chrome === "undefined" || !chrome.runtime || !chrome.runtime.sendMessage) {
+        console.warn("[Stremio Insights] Chrome Extension context not found. Using empty stub data.");
+        set({
+          playbackEvents: [],
+          stats: computeAnalytics([])
+        });
+        resolve();
+        return;
+      }
       // Fetch playback events
       chrome.runtime.sendMessage({ type: "GET_PLAYBACK_EVENTS" }, (response) => {
         const events = response && response.success ? response.events : [];
@@ -60,6 +69,11 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
   performSync: async (authKey: string) => {
     set({ syncLoading: true, syncError: null });
     return new Promise<number>((resolve, reject) => {
+      if (typeof chrome === "undefined" || !chrome.runtime || !chrome.runtime.sendMessage) {
+        set({ syncLoading: false, syncError: "Extension context not found" });
+        reject(new Error("Extension context not found"));
+        return;
+      }
       chrome.runtime.sendMessage(
         { type: "STREMIO_SYNC_REQUEST", payload: { authKey } },
         async (response) => {
@@ -79,6 +93,10 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
 
   clearHistory: async () => {
     return new Promise<void>((resolve) => {
+      if (typeof chrome === "undefined" || !chrome.runtime || !chrome.runtime.sendMessage) {
+        resolve();
+        return;
+      }
       chrome.runtime.sendMessage({ type: "CLEAR_HISTORY" }, async () => {
         await get().fetchData();
         resolve();

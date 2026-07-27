@@ -18,6 +18,15 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log("Stremio Insights Service Worker Installed.");
 });
 
+/**
+ * Broadcasts a message to all open components (e.g. popup or sidebar)
+ */
+function broadcastMessage(message: any) {
+  chrome.runtime.sendMessage(message).catch(() => {
+    // Suppress error when no receiver/popup is currently open
+  });
+}
+
 // Listener for messages from Content Script or UI panels
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handleMessage = async () => {
@@ -58,6 +67,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               lastUpdated: new Date().toISOString()
             });
           }
+
+          // Broadcast that synchronization occurred
+          broadcastMessage({ type: "DATA_SYNCHRONIZED" });
+
           return { success: true };
         }
 
@@ -91,6 +104,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             return { success: false, error: "Missing Stremio authKey" };
           }
           const importedCount = await performStremioRecoverySync(authKey);
+          // Broadcast after recovery sync
+          broadcastMessage({ type: "DATA_SYNCHRONIZED" });
           return { success: true, importedCount };
         }
 
