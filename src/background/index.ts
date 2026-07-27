@@ -253,7 +253,7 @@ async function performStremioRecoverySync(authKey: string): Promise<number> {
           watch_count: state.timesWatched || 1,
           duration,
           time_watched,
-          genres: item.genres || ["Historical"],
+          genres: ["Historical"],
           year: new Date(mergedTimes.lastWatched).getFullYear(),
           firstWatched: mergedTimes.firstWatched,
           lastWatched: mergedTimes.lastWatched,
