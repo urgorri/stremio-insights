@@ -2,19 +2,27 @@ import { PlaybackEvent, WatchStats } from "../types";
 import { normalizeTimestamp } from "../utils/date";
 
 export interface AnalyticsSummary extends WatchStats {
+  mostWatchedYear: number;
+  timeline: Record<string, PlaybackEvent[]>;
+  recentlyWatched: PlaybackEvent[];
+  avgImdbRating: string;
+  moviesPerMonth: Record<string, number>;
+  heatmap: { day: number; hour: number; count: number }[];
+  topDecades: { decade: string; count: number }[];
   topGenres: { name: string; count: number }[];
   topDirectors: { name: string; count: number }[];
   topYears: { name: string; count: number }[];
   mostWatched: { title: string; count: number; type: string }[];
-  activityByMonth: { month: string; count: number }[]; // "YYYY-MM"
-  activityByYear: { year: string; count: number }[]; // "YYYY"
-  heatmap: { day: number; hour: number; count: number }[]; // 7x24 grid
 }
 
-export function computeAnalytics(events: PlaybackEvent[]): AnalyticsSummary {
+export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
+  const movies = library.filter(item => item.type === "movie");
+  const series = library.filter(item => item.type === "series");
+
+  // Basic WatchStats fields
   const stats: WatchStats = {
-    totalMovies: 0,
-    totalSeries: 0,
+    totalMovies: movies.length,
+    totalSeries: series.length,
     totalWatchCount: 0,
     estimatedWatchTime: 0,
     favoriteGenres: [],
@@ -28,114 +36,158 @@ export function computeAnalytics(events: PlaybackEvent[]): AnalyticsSummary {
   const directorCounts: Record<string, number> = {};
   const yearCounts: Record<string, number> = {};
   const titleCounts: Record<string, { count: number; type: string }> = {};
-  const monthlyActivity: Record<string, number> = {};
-  const yearlyActivity: Record<string, number> = {};
 
-  // Initialize heatmap structure (7 days, 24 hours)
+  // Resolve watch timestamp helper, preferring lastWatched, falling back to finished_at or started_at
+  const getWatchTime = (e: PlaybackEvent) => {
+    if (e.lastWatched) return normalizeTimestamp(e.lastWatched);
+    return normalizeTimestamp(e.finished_at || e.started_at);
+  };
+
+  const getFirstWatchTime = (e: PlaybackEvent) => {
+    if (e.firstWatched) return normalizeTimestamp(e.firstWatched);
+    return normalizeTimestamp(e.started_at);
+  };
+
+  // Sort by first watch time to find firstRecorded
+  const sortedByFirst = library
+    .slice()
+    .sort((a, b) => getFirstWatchTime(a) - getFirstWatchTime(b));
+  stats.firstRecorded = sortedByFirst[0] || null;
+
+  // Sort by watch time to find lastWatched
+  const sortedByLast = library
+    .slice()
+    .sort((a, b) => getWatchTime(a) - getWatchTime(b));
+  stats.lastWatched = sortedByLast[sortedByLast.length - 1] || null;
+
+  // Most watched year
+  const libraryYearCounts: Record<number, number> = {};
+
+  library.forEach(item => {
+    stats.totalWatchCount += (item.watch_count || 1);
+    stats.estimatedWatchTime += (item.time_watched || 0);
+
+    if (item.year) {
+      const yr = Number(item.year);
+      if (!isNaN(yr)) {
+        libraryYearCounts[yr] = (libraryYearCounts[yr] || 0) + 1;
+        yearCounts[yr] = (yearCounts[yr] || 0) + 1;
+      }
+    }
+
+    if (item.genres) {
+      item.genres.forEach(g => {
+        genreCounts[g] = (genreCounts[g] || 0) + 1;
+      });
+    }
+
+    if (item.directors) {
+      item.directors.forEach(d => {
+        directorCounts[d] = (directorCounts[d] || 0) + 1;
+      });
+    }
+
+    const titleKey = item.title;
+    if (!titleCounts[titleKey]) {
+      titleCounts[titleKey] = { count: 0, type: item.type };
+    }
+    titleCounts[titleKey].count += (item.watch_count || 1);
+  });
+
+  let mostWatchedYear = 0;
+  let maxYearCount = 0;
+  Object.entries(libraryYearCounts).forEach(([yr, count]) => {
+    if (count > maxYearCount) {
+      maxYearCount = count;
+      mostWatchedYear = Number(yr);
+    }
+  });
+
+  // Timeline (using watch time)
+  const timeline: Record<string, PlaybackEvent[]> = {};
+  const months = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  library
+    .slice()
+    .sort((a, b) => getWatchTime(b) - getWatchTime(a))
+    .forEach(item => {
+      const ts = getWatchTime(item);
+      if (ts) {
+        const d = new Date(ts);
+        if (!isNaN(d.getTime())) {
+          const monthYear = `${months[d.getMonth()]} ${d.getFullYear()}`;
+          if (!timeline[monthYear]) {
+            timeline[monthYear] = [];
+          }
+          timeline[monthYear].push(item);
+        }
+      }
+    });
+
+  // Recently watched
+  const recentlyWatched = sortedByLast.slice().reverse().slice(0, 10);
+
+  // Average IMDb rating
+  const ratedItems = library.filter(item => item.imdbRating && !isNaN(parseFloat(item.imdbRating)));
+  const avgImdbRating = ratedItems.length > 0
+    ? (ratedItems.reduce((sum, item) => sum + parseFloat(item.imdbRating!), 0) / ratedItems.length).toFixed(1)
+    : "0.0";
+
+  // Movies watched per month
+  const moviesPerMonth: Record<string, number> = {};
+  movies.forEach(item => {
+    const ts = getWatchTime(item);
+    if (ts) {
+      const d = new Date(ts);
+      if (!isNaN(d.getTime())) {
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        moviesPerMonth[key] = (moviesPerMonth[key] || 0) + 1;
+      }
+    }
+  });
+
+  // Heatmap: Day vs Hour (7 x 24)
+  const heatmap: { day: number; hour: number; count: number }[] = [];
   const heatmapGrid: Record<string, number> = {};
   for (let d = 0; d < 7; d++) {
     for (let h = 0; h < 24; h++) {
       heatmapGrid[`${d}-${h}`] = 0;
     }
   }
-
-  if (events.length === 0) {
-    return {
-      ...stats,
-      topGenres: [],
-      topDirectors: [],
-      topYears: [],
-      mostWatched: [],
-      activityByMonth: [],
-      activityByYear: [],
-      heatmap: Object.entries(heatmapGrid).map(([key, count]) => {
-        const [day, hour] = key.split("-").map(Number);
-        return { day, hour, count };
-      })
-    };
-  }
-
-  // Helpers to get correct timestamps, preferring firstWatched and lastWatched
-  const getFirstWatchedTime = (e: PlaybackEvent) => e.firstWatched ? normalizeTimestamp(e.firstWatched) : normalizeTimestamp(e.started_at);
-  const getLastWatchedTime = (e: PlaybackEvent) => e.lastWatched ? normalizeTimestamp(e.lastWatched) : normalizeTimestamp(e.finished_at || e.started_at);
-
-  // Sort events by firstRecorded/firstWatched ascending to identify first recorded easily
-  const chronEvents = [...events].sort((a, b) => getFirstWatchedTime(a) - getFirstWatchedTime(b));
-
-  stats.firstRecorded = chronEvents[0] || null;
-
-  // Identify last watched based on highest lastWatched/finished_at timestamp
-  const chronLastEvents = [...events].sort((a, b) => getLastWatchedTime(a) - getLastWatchedTime(b));
-  stats.lastWatched = chronLastEvents[chronLastEvents.length - 1] || null;
-
-  const movieIdsSeen = new Set<string>();
-  const seriesIdsSeen = new Set<string>();
-
-  for (const event of events) {
-    // Media counts
-    if (event.type === "movie") {
-      movieIdsSeen.add(event.imdb_id);
-    } else if (event.type === "series") {
-      seriesIdsSeen.add(event.parent_id || event.imdb_id.split(":")[0]);
-    }
-
-    // Cumulative watches
-    stats.totalWatchCount += (event.watch_count || 1);
-    stats.estimatedWatchTime += event.time_watched || 0;
-
-    // Genres
-    if (event.genres) {
-      for (const g of event.genres) {
-        genreCounts[g] = (genreCounts[g] || 0) + 1;
+  library.forEach(item => {
+    const ts = getWatchTime(item);
+    if (ts) {
+      const d = new Date(ts);
+      if (!isNaN(d.getTime())) {
+        const day = d.getDay();
+        const hour = d.getHours();
+        heatmapGrid[`${day}-${hour}`] = (heatmapGrid[`${day}-${hour}`] || 0) + 1;
       }
     }
+  });
+  Object.entries(heatmapGrid).forEach(([key, count]) => {
+    const [day, hour] = key.split("-").map(Number);
+    heatmap.push({ day, hour, count });
+  });
 
-    // Directors
-    if (event.directors) {
-      for (const d of event.directors) {
-        directorCounts[d] = (directorCounts[d] || 0) + 1;
+  // Top decades
+  const decadeCounts: Record<string, number> = {};
+  library.forEach(item => {
+    if (item.year) {
+      const yr = Number(item.year);
+      if (!isNaN(yr)) {
+        const decade = `${Math.floor(yr / 10) * 10}s`;
+        decadeCounts[decade] = (decadeCounts[decade] || 0) + 1;
       }
     }
+  });
+  const topDecades = Object.entries(decadeCounts)
+    .map(([decade, count]) => ({ decade, count }))
+    .sort((a, b) => b.count - a.count);
 
-    // Release Year
-    if (event.year) {
-      yearCounts[event.year] = (yearCounts[event.year] || 0) + 1;
-    }
-
-    // Most Watched Titles
-    const titleKey = event.title;
-    if (!titleCounts[titleKey]) {
-      titleCounts[titleKey] = { count: 0, type: event.type };
-    }
-    titleCounts[titleKey].count += (event.watch_count || 1);
-
-    // Timestamps activity using firstWatched or started_at
-    const startTimestamp = event.firstWatched ? normalizeTimestamp(event.firstWatched) : normalizeTimestamp(event.started_at);
-    const startDate = new Date(startTimestamp);
-    if (!isNaN(startDate.getTime())) {
-      // Heatmap (day: 0-6, hour: 0-23 in local/provided time)
-      // Since date formatting timezone is America/Argentina/Buenos_Aires, we should idealize the date in that TZ
-      // Or just standard local hours as helper
-      const day = startDate.getDay();
-      const hour = startDate.getHours();
-      heatmapGrid[`${day}-${hour}`] = (heatmapGrid[`${day}-${hour}`] || 0) + 1;
-
-      // Monthly activity "YYYY-MM"
-      const yyyy = startDate.getFullYear();
-      const mm = String(startDate.getMonth() + 1).padStart(2, "0");
-      const monthKey = `${yyyy}-${mm}`;
-      monthlyActivity[monthKey] = (monthlyActivity[monthKey] || 0) + 1;
-
-      // Yearly activity "YYYY"
-      const yearKey = String(yyyy);
-      yearlyActivity[yearKey] = (yearlyActivity[yearKey] || 0) + 1;
-    }
-  }
-
-  stats.totalMovies = movieIdsSeen.size;
-  stats.totalSeries = seriesIdsSeen.size;
-
-  // Sorting and formatting helper
+  // Sorting helper
   const sortMapToArray = (counts: Record<string, number>) =>
     Object.entries(counts)
       .map(([name, count]) => ({ name, count }))
@@ -153,37 +205,29 @@ export function computeAnalytics(events: PlaybackEvent[]): AnalyticsSummary {
     .map(([title, info]) => ({ title, count: info.count, type: info.type }))
     .sort((a, b) => b.count - a.count);
 
-  const activityByMonthList = Object.entries(monthlyActivity)
-    .map(([month, count]) => ({ month, count }))
-    .sort((a, b) => a.month.localeCompare(b.month));
-
-  const activityByYearList = Object.entries(yearlyActivity)
-    .map(([year, count]) => ({ year, count }))
-    .sort((a, b) => a.year.localeCompare(b.year));
-
-  const heatmapList = Object.entries(heatmapGrid).map(([key, count]) => {
-    const [day, hour] = key.split("-").map(Number);
-    return { day, hour, count };
-  });
-
   return {
     ...stats,
+    mostWatchedYear,
+    timeline,
+    recentlyWatched,
+    avgImdbRating,
+    moviesPerMonth,
+    heatmap,
+    topDecades,
     topGenres: topGenresList,
     topDirectors: topDirectorsList,
     topYears: topYearsList,
-    mostWatched: mostWatchedList,
-    activityByMonth: activityByMonthList,
-    activityByYear: activityByYearList,
-    heatmap: heatmapList
+    mostWatched: mostWatchedList
   };
 }
 
-export function groupEventsIntoTimeline(events: PlaybackEvent[]) {
-  const getFirstWatchedTime = (e: PlaybackEvent) => e.firstWatched ? normalizeTimestamp(e.firstWatched) : normalizeTimestamp(e.started_at);
+export function groupEventsIntoTimeline(events: PlaybackEvent[]): Record<string, Record<string, PlaybackEvent[]>> {
+  const getWatchTime = (e: PlaybackEvent) => {
+    if (e.lastWatched) return normalizeTimestamp(e.lastWatched);
+    return normalizeTimestamp(e.finished_at || e.started_at);
+  };
 
-  // Sort descending by start date/firstWatched
-  const sorted = [...events].sort((a, b) => getFirstWatchedTime(b) - getFirstWatchedTime(a));
-
+  const sorted = [...events].sort((a, b) => getWatchTime(b) - getWatchTime(a));
   const timeline: Record<string, Record<string, PlaybackEvent[]>> = {};
 
   const months = [
@@ -192,8 +236,9 @@ export function groupEventsIntoTimeline(events: PlaybackEvent[]) {
   ];
 
   for (const event of sorted) {
-    const timestamp = event.firstWatched ? normalizeTimestamp(event.firstWatched) : normalizeTimestamp(event.started_at);
-    const d = new Date(timestamp);
+    const ts = getWatchTime(event);
+    if (!ts) continue;
+    const d = new Date(ts);
     if (isNaN(d.getTime())) continue;
 
     const year = String(d.getFullYear());

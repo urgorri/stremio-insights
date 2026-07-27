@@ -22,6 +22,10 @@ export interface PlaybackEvent {
   firstWatched?: number; // Unix timestamp in milliseconds
   lastWatched?: number; // Unix timestamp in milliseconds
   source?: string; // e.g., "stremio" or "player"
+  imdbRating?: string;
+  popularity?: number;
+  poster?: string;
+  repaired?: boolean;
 }
 
 export interface WatchStats {

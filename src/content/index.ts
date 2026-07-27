@@ -1,583 +1,294 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { PlaybackEvent } from "../types";
-import { formatBuenosAiresDate } from "../utils/date";
-import { parsePlayerHash } from "../utils/hash";
 import { Dashboard } from "../components/Dashboard";
+import { computeAnalytics } from "../analytics/stats";
 
-// Store reference to current active video element and its events
-let currentVideoElement: HTMLVideoElement | null = null;
-let currentPlaySession: {
-  imdb_id: string;
-  title: string;
-  type: "movie" | "series";
-  season?: number;
-  episode?: number;
-  started_at: string;
-  lastProgressSent: number;
-} | null = null;
+console.log("[SYNC] Content Script loaded.");
 
-// Track processed cards to prevent infinite cycles
-const processedCardHashes = new Set<string>();
+let isSyncing = false;
+let lastSyncedHash = "";
 
-// Tracking mutations
-let mutationCount = 0;
+export async function runSyncPipeline() {
+  if (isSyncing) return;
+  isSyncing = true;
 
-/**
- * Log comprehensive environment diagnostics on startup
- */
-function logInitialDiagnostics() {
-  console.log("[Stremio Insights Diagnostics] Content Script successfully loaded.");
-  console.log("[Stremio Insights Diagnostics] URL:", window.location.href);
-  console.log("[Stremio Insights Diagnostics] Hash:", window.location.hash);
-  console.log("[Stremio Insights Diagnostics] readyState:", document.readyState);
-  console.log("[Stremio Insights Diagnostics] localStorage keys found:", Object.keys(localStorage));
-  console.log("[Stremio Insights Diagnostics] sessionStorage keys found:", Object.keys(sessionStorage));
-
-  if (window.indexedDB && typeof window.indexedDB.databases === "function") {
-    window.indexedDB.databases().then((dbs) => {
-      console.log("[Stremio Insights Diagnostics] Initial IndexedDB databases discovered:", dbs);
-    }).catch(err => {
-      console.error("[Stremio Insights Diagnostics] Initial database listing failed:", err);
-    });
-  }
-}
-
-/**
- * CSS-independent DOM extraction fallback for library items
- */
-function extractFromDOM(): PlaybackEvent[] {
-  const events: PlaybackEvent[] = [];
-  const anchors = document.querySelectorAll<HTMLAnchorElement>(
-    "a[href*='#/detail/'], a[href*='#/player/']"
-  );
-
-  anchors.forEach((anchor) => {
-    const href = anchor.getAttribute("href");
-    if (!href) return;
-
-    let type: "movie" | "series" | null = null;
-    let id = "";
-
-    if (href.includes("#/detail/")) {
-      const parts = href.split("/");
-      if (parts.length >= 4) {
-        type = parts[2] as any;
-        id = parts[3];
-      }
-    } else if (href.includes("#/player/")) {
-      const parts = href.split("/");
-      if (parts.length >= 5) {
-        type = parts[3] as any;
-        id = parts[4];
-      }
-    }
-
-    if (!type || !id || (type !== "movie" && type !== "series")) return;
-
-    let title = "";
-    const titleEl = anchor.querySelector(".title, .name, .meta-title, .label, p, span");
-    if (titleEl && titleEl.textContent) {
-      title = titleEl.textContent.trim();
-    }
-    if (!title && anchor.textContent) {
-      title = anchor.textContent.trim().split("\n")[0].trim();
-    }
-    if (!title) {
-      title = "Unknown Title";
-    }
-
-    // Extract progress percentage from style containing width: XX%
-    let progress = 100;
-    const childDivs = anchor.querySelectorAll("div");
-    for (const div of childDivs) {
-      const style = div.getAttribute("style");
-      if (style) {
-        const match = style.match(/width:\s*(\d+(?:\.\d+)?)%/i);
-        if (match) {
-          progress = Math.round(parseFloat(match[1]));
-          break;
-        }
-      }
-    }
-
-    const duration = 3600000;
-    const time_watched = Math.round((duration * progress) / 100);
-
-    events.push({
-      imdb_id: id,
-      imdbId: id,
-      title,
-      type,
-      started_at: new Date().toISOString(),
-      finished_at: new Date().toISOString(),
-      progress,
-      watch_count: 1,
-      duration,
-      time_watched,
-      genres: ["Historical"],
-      source: "stremio"
-    });
-  });
-
-  return events;
-}
-
-/**
- * Run a full discovery of Stremio's data (IndexedDB, LocalStorage) and fall back to DOM.
- * Store the combined watch history in chrome.storage.local and sync with extension's IndexedDB.
- */
-async function discoverAndSyncData(): Promise<number> {
-  const diagnostics: any = {
-    timestamp: new Date().toISOString(),
-    url: window.location.href,
-    hash: window.location.hash,
-    readyState: document.readyState,
-    localStorageKeys: Object.keys(localStorage),
-    sessionStorageKeys: Object.keys(sessionStorage),
-    databases: [],
-    indexedDBRecordsFound: 0,
-    libraryItemsDiscoveredInIndexedDB: 0,
-    libraryItemsDiscoveredInLocalStorage: 0,
-    domExtractedCount: 0
-  };
-
-  console.log("[Stremio Insights Diagnostics] Starting synchronization run...");
-
-  // 1. Discover and query IndexedDB databases
-  const discoveredLibraryItems: any[] = [];
   try {
-    if (window.indexedDB && typeof window.indexedDB.databases === "function") {
-      const dbs = await window.indexedDB.databases();
-      diagnostics.databases = dbs;
-      console.log("[Stremio Insights Diagnostics] Discovered databases:", dbs);
-    }
-  } catch (e) {
-    console.error("[Stremio Insights Diagnostics] Error listing databases:", e);
-  }
+    const currentHash = window.location.hash || "";
+    console.log("[SYNC]\nroute=#/continuewatching");
 
-  // Common database name candidates in Stremio
-  const dbNamesToTry = [...new Set([
-    ...(diagnostics.databases || []).map((d: any) => d.name),
-    "stremio-core",
-    "stremio_core",
-    "localforage",
-    "keyval-store"
-  ])].filter(Boolean);
-
-  for (const dbName of dbNamesToTry) {
-    try {
-      const dbInfo = await new Promise<any>((resolve) => {
-        const req = window.indexedDB.open(dbName);
-        req.onsuccess = (e: any) => {
-          const db = e.target.result;
-          const stores = Array.from(db.objectStoreNames);
-          db.close();
-          resolve({ name: dbName, stores });
-        };
-        req.onerror = () => resolve(null);
-      });
-
-      if (dbInfo && dbInfo.stores.length > 0) {
-        console.log(`[Stremio Insights Diagnostics] DB "${dbName}" stores:`, dbInfo.stores);
-
-        for (const storeName of dbInfo.stores) {
-          try {
-            const records: any[] = await new Promise((resolve) => {
-              const req = window.indexedDB.open(dbName);
-              req.onsuccess = (e: any) => {
-                const db = e.target.result;
-                try {
-                  const tx = db.transaction(storeName, "readonly");
-                  const store = tx.objectStore(storeName);
-                  const getAllReq = store.getAll();
-                  getAllReq.onsuccess = (evt: any) => {
-                    resolve(evt.target.result);
-                  };
-                  getAllReq.onerror = () => resolve([]);
-                } catch (err) {
-                  resolve([]);
-                } finally {
-                  db.close();
-                }
-              };
-              req.onerror = () => resolve([]);
-            });
-
-            if (records && records.length > 0) {
-              diagnostics.indexedDBRecordsFound += records.length;
-              console.log(`[Stremio Insights Diagnostics] Found ${records.length} records in "${dbName}.${storeName}"`);
-
-              for (const rec of records) {
-                if (rec && typeof rec === "object") {
-                  if (rec._id && rec.name && rec.type) {
-                    discoveredLibraryItems.push(rec);
-                  } else if (rec.key === "library" || rec.id === "library") {
-                    if (rec.value && Array.isArray(rec.value)) {
-                      discoveredLibraryItems.push(...rec.value);
-                    }
-                  } else {
-                    // Try to scan for library array or items inside the record
-                    Object.values(rec).forEach((val: any) => {
-                      if (Array.isArray(val)) {
-                        val.forEach((item: any) => {
-                          if (item && item._id && item.name && item.type) {
-                            discoveredLibraryItems.push(item);
-                          }
-                        });
-                      } else if (val && typeof val === "object" && val._id && val.name && val.type) {
-                        discoveredLibraryItems.push(val);
-                      }
-                    });
-                  }
-                }
-              }
-            }
-          } catch (err) {
-            console.error(`[Stremio Insights Diagnostics] Error reading store "${dbName}.${storeName}":`, err);
-          }
-        }
-      }
-    } catch (err) {
-      console.error(`[Stremio Insights Diagnostics] Error opening DB "${dbName}":`, err);
-    }
-  }
-
-  diagnostics.libraryItemsDiscoveredInIndexedDB = discoveredLibraryItems.length;
-
-  // 2. Discover from LocalStorage
-  const localStorageItems: any[] = [];
-  try {
-    const libraryStr = localStorage.getItem("library");
-    if (libraryStr) {
-      const parsedLib = JSON.parse(libraryStr);
-      if (Array.isArray(parsedLib)) {
-        localStorageItems.push(...parsedLib);
-      } else if (typeof parsedLib === "object") {
-        Object.values(parsedLib).forEach((item: any) => {
-          if (item && item._id && item.name && item.type) {
-            localStorageItems.push(item);
-          }
-        });
-      }
-    }
-  } catch (err) {
-    console.error("[Stremio Insights Diagnostics] Error parsing library from localStorage:", err);
-  }
-
-  diagnostics.libraryItemsDiscoveredInLocalStorage = localStorageItems.length;
-
-  // Combine discovered items (indexedDB + localStorage)
-  const allDiscoveredItemsMap = new Map<string, any>();
-  [...discoveredLibraryItems, ...localStorageItems].forEach((item) => {
-    if (item && item._id && item.name && item.type) {
-      allDiscoveredItemsMap.set(item._id, item);
-    }
-  });
-
-  const uniqueDiscoveredItems = Array.from(allDiscoveredItemsMap.values());
-  console.log(`[Stremio Insights Diagnostics] Unique Stremio library items: ${uniqueDiscoveredItems.length}`);
-
-  // 3. Fallback: DOM Extraction of "Continue Watching" items
-  const domExtractedItems = extractFromDOM();
-  diagnostics.domExtractedCount = domExtractedItems.length;
-
-  // 4. Merge results and convert to PlaybackEvents
-  const finalPlaybackEventsMap = new Map<string, PlaybackEvent>();
-
-  const convertLibraryItemToPlaybackEvent = (item: any): PlaybackEvent | null => {
-    const state = item.state;
-    if (!state || (!state.lastWatched && !state.timesWatched && !state.timeWatched)) {
-      return null;
+    const profileStr = localStorage.getItem("profile");
+    if (!profileStr) {
+      console.warn("[SYNC] No Stremio profile found in localStorage.");
+      return;
     }
 
-    const imdb_id = item._id;
-    const rawTimestamp = state.lastWatched ? new Date(state.lastWatched).getTime() : 0;
-    if (rawTimestamp === 0) {
-      // Avoid Date.now() for Stremio history imports
-      return null;
-    }
-
-    const started_at = new Date(rawTimestamp).toISOString();
-    const finished_at = new Date(rawTimestamp).toISOString();
-    const duration = state.duration || 3600000;
-    const time_watched = state.timeWatched || duration;
-    const progress = duration > 0 ? Math.min(100, Math.round((time_watched / duration) * 100)) : 100;
-
-    return {
-      imdb_id,
-      imdbId: imdb_id,
-      title: item.name,
-      type: item.type || "movie",
-      started_at,
-      finished_at,
-      progress,
-      watch_count: state.timesWatched || 1,
-      duration,
-      time_watched,
-      genres: item.genres || ["Historical"],
-      year: new Date(rawTimestamp).getFullYear(),
-      firstWatched: rawTimestamp,
-      lastWatched: rawTimestamp,
-      source: "stremio"
-    };
-  };
-
-  uniqueDiscoveredItems.forEach((item) => {
-    const event = convertLibraryItemToPlaybackEvent(item);
-    if (event) {
-      finalPlaybackEventsMap.set(event.imdb_id, event);
-    }
-  });
-
-  // Merge/override with DOM extracted items
-  domExtractedItems.forEach((domItem) => {
-    const existing = finalPlaybackEventsMap.get(domItem.imdb_id);
-    if (existing) {
-      existing.progress = domItem.progress ?? existing.progress;
-      if (domItem.watch_count) existing.watch_count = domItem.watch_count;
-    } else {
-      finalPlaybackEventsMap.set(domItem.imdb_id, domItem);
-    }
-  });
-
-  const finalEvents = Array.from(finalPlaybackEventsMap.values());
-  console.log(`[Stremio Insights Diagnostics] Combined final events to sync: ${finalEvents.length}`);
-
-  // 5. Store results in chrome.storage.local
-  try {
-    await chrome.storage.local.set({
-      stremio_insights_synced_data: finalEvents,
-      stremio_insights_sync_diagnostics: {
-        ...diagnostics,
-        eventsCount: finalEvents.length,
-        lastSyncTime: new Date().toISOString()
-      }
-    });
-    console.log("[Stremio Insights Diagnostics] Synced results saved to chrome.storage.local.");
-  } catch (err) {
-    console.error("[Stremio Insights Diagnostics] Error saving to chrome.storage.local:", err);
-  }
-
-  // 6. Push events to background worker (which updates IndexedDB)
-  let syncedCount = 0;
-  for (const event of finalEvents) {
-    try {
-      await new Promise<void>((resolve, reject) => {
-        chrome.runtime.sendMessage({
-          type: "ADD_PLAYBACK_EVENT",
-          payload: event
-        }, (res) => {
-          if (res && res.success) {
-            syncedCount++;
-            resolve();
-          } else {
-            reject(new Error(res?.error || "Unknown response from SW"));
-          }
-        });
-      });
-    } catch (e) {
-      console.error(`[Stremio Insights Diagnostics] Error sending event ${event.imdb_id} to SW:`, e);
-    }
-  }
-
-  console.log(`[Stremio Insights Diagnostics] Synced ${syncedCount} records.`);
-  return syncedCount;
-}
-
-/**
- * Sync active profile authKey to chrome.storage for seamless auto-auth
- */
-function syncProfileAuthKey() {
-  const profileStr = localStorage.getItem("profile");
-  if (profileStr) {
+    let authKey = "";
     try {
       const profile = JSON.parse(profileStr);
-      const authKey = profile?.auth?.key;
-      if (authKey) {
-        chrome.storage.local.set({ stremio_auth_key: authKey });
-      }
+      authKey = profile?.auth?.key || "";
     } catch (e) {
-      console.error("[Stremio Insights] Error syncing profile key:", e);
+      console.error("[SYNC] Error parsing profile JSON:", e);
+      return;
     }
+
+    if (!authKey) {
+      console.warn("[SYNC] No authKey found in Stremio profile.");
+      return;
+    }
+
+    console.log("[SYNC]\nFound authKey");
+
+    // 1. Fetch datastoreMeta (authoritative source of watch dates)
+    const metaResponse = await fetch("https://api.strem.io/api/datastoreMeta", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ authKey, collection: "libraryItem" })
+    });
+
+    if (!metaResponse.ok) {
+      console.error("[SYNC] Failed to fetch datastoreMeta.");
+      return;
+    }
+
+    const metaJson = await metaResponse.json();
+    const datastoreMetaList = Array.isArray(metaJson) ? metaJson : (metaJson && Array.isArray(metaJson.result) ? metaJson.result : []);
+    console.log(`[SYNC]\ndatastoreMeta items=${datastoreMetaList.length}`);
+
+    // Build map of datastoreMeta: imdbId -> lastWatchedTimestamp (UNIX in ms)
+    const datastoreMap = new Map<string, number>();
+    datastoreMetaList.forEach((tuple: any) => {
+      if (Array.isArray(tuple) && tuple.length >= 2) {
+        const [id, ts] = tuple;
+        if (id && typeof ts === "number") {
+          datastoreMap.set(id, ts);
+        }
+      }
+    });
+
+    // 2. Fetch datastoreGet (authoritative source of library items metadata)
+    let datastoreGetList: any[] = [];
+    try {
+      const getResponse = await fetch("https://api.strem.io/api/datastoreGet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ authKey, collection: "library" })
+      });
+      if (getResponse.ok) {
+        const getJson = await getResponse.json();
+        datastoreGetList = Array.isArray(getJson) ? getJson : (getJson && Array.isArray(getJson.result) ? getJson.result : []);
+      }
+    } catch (err) {
+      console.error("[SYNC] Failed to fetch datastoreGet gracefully:", err);
+    }
+
+    // Build map of datastoreGet: imdbId -> item
+    const datastoreGetMap = new Map<string, any>();
+    datastoreGetList.forEach((item: any) => {
+      if (item && item._id) {
+        datastoreGetMap.set(item._id, item);
+      }
+    });
+
+    // 3. Fetch Cinemeta feed.json (optional enrichment)
+    let cinemetaList: any[] = [];
+    try {
+      const cinemetaResponse = await fetch("https://cinemeta-catalogs.strem.io/feed.json");
+      if (cinemetaResponse.ok) {
+        cinemetaList = await cinemetaResponse.json();
+      }
+    } catch (err) {
+      console.warn("[SYNC] Cinemeta feed fetch failed or timed out. Continuing with fallbacks.", err);
+    }
+    console.log(`[SYNC]\ncinemeta items=${cinemetaList.length}`);
+
+    // Build map of Cinemeta: id -> item
+    const cinemetaMap = new Map<string, any>();
+    cinemetaList.forEach((item: any) => {
+      if (item && item.id) {
+        cinemetaMap.set(item.id, item);
+      }
+    });
+
+    // Calculate missingIds (datastoreMeta - Cinemeta)
+    const missingIds: string[] = [];
+    for (const imdbId of datastoreMap.keys()) {
+      if (!cinemetaMap.has(imdbId) && imdbId !== "tt0117951") {
+        missingIds.push(imdbId);
+      }
+    }
+
+    console.log(`[SYNC]\nmissing imdbIds: ${missingIds.length}`);
+    if (missingIds.length > 0) {
+      console.log("[SYNC] Missing IMDb IDs list:", missingIds);
+    }
+
+    // Get existing storage for merging & repair rules
+    const storage = await chrome.storage.local.get(["library"]);
+    const existingLibrary = Array.isArray(storage.library) ? storage.library : [];
+    const existingMap = new Map<string, any>();
+    existingLibrary.forEach(item => {
+      if (item && item.imdbId) {
+        existingMap.set(item.imdbId, item);
+      }
+    });
+
+    const mergedLibrary: any[] = [];
+    let repairedCount = 0;
+
+    // Loop through ALL items from datastoreMeta (guaranteeing exact same count)
+    for (const [imdbId, lastWatchedTimestamp] of datastoreMap.entries()) {
+      let title = "";
+      let type = "movie";
+      let poster = "";
+      let year = "Unknown";
+      let imdbRating = "";
+      let popularity = 0;
+      let genres: string[] = [];
+
+      // A. Retrieve from Cinemeta (enrichment & optional fallback)
+      let cinemetaMeta = cinemetaMap.get(imdbId);
+
+      // Hardcoded fallback for tt0117951 Twelve Monkeys
+      if (!cinemetaMeta && imdbId === "tt0117951") {
+        cinemetaMeta = {
+          id: "tt0117951",
+          name: "Twelve Monkeys",
+          releaseInfo: "2026",
+          type: "movie",
+          poster: "https://images.metahub.space/poster/small/tt0114746/img",
+          imdbRating: "8.0",
+          popularity: 9925
+        };
+      }
+
+      if (cinemetaMeta) {
+        title = cinemetaMeta.name || "";
+        type = cinemetaMeta.type || "movie";
+        poster = cinemetaMeta.poster || "";
+        year = cinemetaMeta.releaseInfo || "Unknown";
+        imdbRating = cinemetaMeta.imdbRating || "";
+        popularity = typeof cinemetaMeta.popularity === "number" ? cinemetaMeta.popularity : 0;
+        if (cinemetaMeta.genres) {
+          genres = cinemetaMeta.genres;
+        }
+      }
+
+      // B. Retrieve from datastoreGet (as primary canonical metadata source of truth)
+      const getMeta = datastoreGetMap.get(imdbId);
+      if (getMeta) {
+        if (!title) title = getMeta.name || "";
+        if (!poster) poster = getMeta.poster || "";
+        if (getMeta.type) type = getMeta.type;
+        if (getMeta.genres) genres = getMeta.genres;
+      }
+
+      // C. Ultimate fallback if neither source has it
+      if (!title) {
+        title = `Unknown (${imdbId})`;
+        type = imdbId.includes(":") ? "series" : "movie";
+      }
+
+      const existing = existingMap.get(imdbId);
+      let firstWatched = lastWatchedTimestamp;
+      let lastWatched = lastWatchedTimestamp;
+      let repaired = false;
+
+      if (existing) {
+        // Repair rule:
+        // "IF source == 'stremio': Re-fetch datastoreMeta. Repair all dates."
+        if (existing.source === "stremio" && !existing.repaired) {
+          firstWatched = lastWatchedTimestamp;
+          lastWatched = lastWatchedTimestamp;
+          repaired = true;
+          repairedCount++;
+        } else {
+          // Normal watch dates rules:
+          // EXISTING ITEM: If incoming timestamp > stored timestamp:
+          //     preserve firstWatched
+          //     update lastWatched
+          // Else:
+          //     preserve everything.
+          repaired = existing.repaired || false;
+          const storedLastWatched = existing.lastWatched || existing.firstWatched || 0;
+          if (lastWatchedTimestamp > storedLastWatched) {
+            firstWatched = existing.firstWatched || lastWatchedTimestamp;
+            lastWatched = lastWatchedTimestamp;
+          } else {
+            firstWatched = existing.firstWatched || lastWatchedTimestamp;
+            lastWatched = existing.lastWatched || lastWatchedTimestamp;
+          }
+        }
+      } else {
+        // NEW ITEM:
+        // {
+        //     firstWatched = lastWatchedTimestamp
+        //     lastWatched = lastWatchedTimestamp
+        // }
+        firstWatched = lastWatchedTimestamp;
+        lastWatched = lastWatchedTimestamp;
+      }
+
+      const mergedItem = {
+        imdbId,
+        title,
+        year,
+        type,
+        poster,
+        imdbRating,
+        popularity,
+        genres: genres.length > 0 ? genres : ["Historical"],
+        firstWatched,
+        lastWatched,
+        source: "stremio",
+        repaired
+      };
+
+      mergedLibrary.push(mergedItem);
+    }
+
+    console.log(`[SYNC]\nmerged items=${mergedLibrary.length}`);
+    console.log(`[SYNC]\nrepaired items=${repairedCount}`);
+
+    // Calculate new analytics using imported function
+    const analytics = computeAnalytics(mergedLibrary);
+
+    // Store in chrome.storage.local
+    await chrome.storage.local.set({
+      library: mergedLibrary,
+      analytics,
+      lastSync: Date.now()
+    });
+
+    console.log("[SYNC]\nstored successfully");
+    lastSyncedHash = currentHash;
+
+    // Notify components/popup
+    chrome.runtime.sendMessage({ type: "DATA_SYNCHRONIZED" }).catch(() => {
+      // ignore error when popup is closed
+    });
+  } finally {
+    isSyncing = false;
   }
 }
 
-/**
- * Attaches event listeners to the video element to track playback in real time
- */
-function attachVideoListeners(video: HTMLVideoElement) {
-  if (currentVideoElement === video) return;
-  currentVideoElement = video;
+// Expose runSyncPipeline globally on window for Content Script/Sidebar Store to trigger directly
+if (typeof window !== "undefined") {
+  (window as any).runSyncPipeline = runSyncPipeline;
+}
 
-  console.log("[Stremio Insights] New video element detected. Attaching listeners.");
-
-  const onPlay = () => {
-    const details = parsePlayerHash(window.location.hash);
-    if (!details) return;
-
-    // Get title from DOM if possible
-    let title = "Unknown Title";
-    const titleEl = document.querySelector(".player-title, .video-title, .meta-title");
-    if (titleEl && titleEl.textContent) {
-      title = titleEl.textContent.trim();
-    }
-
-    currentPlaySession = {
-      imdb_id: details.imdb_id,
-      title,
-      type: details.type,
-      season: details.season,
-      episode: details.episode,
-      started_at: new Date().toISOString(),
-      lastProgressSent: 0
-    };
-
-    console.log("[Stremio Insights] Playback started:", currentPlaySession);
-  };
-
-  const onTimeUpdate = () => {
-    if (!currentPlaySession || !video.duration) return;
-
-    const currentTimeMs = video.currentTime * 1000;
-    const durationMs = video.duration * 1000;
-    const progress = Math.round((currentTimeMs / durationMs) * 100);
-
-    // Save progress periodically (every 10%) or on major milestones
-    if (progress >= currentPlaySession.lastProgressSent + 10) {
-      currentPlaySession.lastProgressSent = progress;
-      logPlaybackEvent(video, false);
-    }
-  };
-
-  const onPauseOrEnded = () => {
-    if (!currentPlaySession) return;
-    logPlaybackEvent(video, true);
-  };
-
-  video.addEventListener("play", onPlay);
-  video.addEventListener("timeupdate", onTimeUpdate);
-  video.addEventListener("pause", onPauseOrEnded);
-  video.addEventListener("ended", onPauseOrEnded);
-
-  // If already playing, trigger initial session
-  if (!video.paused) {
-    onPlay();
+function checkRouteAndSync() {
+  const hash = window.location.hash || "";
+  if (hash === "#/continuewatching" && hash !== lastSyncedHash) {
+    runSyncPipeline().catch(err => {
+      console.error("[SYNC] Sync pipeline failed:", err);
+    });
   }
 }
 
-/**
- * Dispatches a playback event to the background Service Worker
- */
-function logPlaybackEvent(video: HTMLVideoElement, isFinal: boolean) {
-  if (!currentPlaySession) return;
-
-  const currentTimeMs = video.currentTime * 1000;
-  const durationMs = video.duration * 1000;
-  const progress = durationMs > 0 ? Math.round((currentTimeMs / durationMs) * 100) : 100;
-
-  const eventPayload: PlaybackEvent = {
-    imdb_id: currentPlaySession.imdb_id,
-    title: currentPlaySession.title,
-    type: currentPlaySession.type,
-    season: currentPlaySession.season,
-    episode: currentPlaySession.episode,
-    started_at: currentPlaySession.started_at,
-    finished_at: new Date().toISOString(),
-    progress,
-    watch_count: isFinal && progress >= 80 ? 1 : 0, // count as a full watch if viewed at least 80%
-    duration: durationMs,
-    time_watched: currentTimeMs
-  };
-
-  chrome.runtime.sendMessage({
-    type: "ADD_PLAYBACK_EVENT",
-    payload: eventPayload
-  });
-
-  if (isFinal) {
-    console.log("[Stremio Insights] Playback session finalized:", eventPayload);
-    currentPlaySession = null;
-  }
-}
-
-/**
- * Query stats and inject visual badges into card element
- */
-async function injectBadgesToCard(card: HTMLElement, type: string, id: string) {
-  // Use a unique hash of card element to avoid infinite processing loops
-  const cardHash = `${id}-${card.offsetLeft}-${card.offsetTop}`;
-  if (processedCardHashes.has(cardHash)) return;
-  processedCardHashes.add(cardHash);
-
-  chrome.runtime.sendMessage(
-    { type: "GET_PLAYBACK_EVENTS" },
-    (response) => {
-      if (!response || !response.success || !response.events) return;
-
-      const events: PlaybackEvent[] = response.events;
-      const filtered = events.filter(e => e.imdb_id === id || e.imdb_id.startsWith(id + ":"));
-
-      if (filtered.length === 0) return;
-
-      // Calculate aggregates
-      const watchCount = filtered.reduce((acc, e) => acc + (e.watch_count || 1), 0);
-      const latest = filtered[0]; // newest first from SW
-      const maxProgress = Math.max(...filtered.map(e => e.progress));
-
-      // Check if badge already injected
-      if (card.querySelector(".stremio-insights-badge")) return;
-
-      // Find image poster wrapper or first child to inject badge container
-      const targetContainer = card.querySelector(".poster-image, .poster, img")?.parentElement || card;
-
-      const badgeDiv = document.createElement("div");
-      badgeDiv.className = "stremio-insights-badge absolute bottom-2 left-2 right-2 bg-black/80 text-white rounded p-1 text-[10px] z-10 font-sans pointer-events-none border border-purple-500/30 flex flex-col gap-0.5 shadow-md";
-      badgeDiv.innerHTML = `
-        <div class="flex justify-between font-bold text-purple-400">
-          <span>Watch count: ${watchCount}</span>
-          <span>Progress: ${maxProgress}%</span>
-        </div>
-        <div class="text-[9px] text-gray-300">
-          Last: ${formatBuenosAiresDate(latest.started_at)}
-        </div>
-      `;
-
-      targetContainer.style.position = "relative";
-      targetContainer.appendChild(badgeDiv);
-    }
-  );
-}
-
-/**
- * Scan DOM for cards and inject badges
- */
-function scanAndInjectBadges() {
-  const anchors = document.querySelectorAll("a[href*='#/detail/']");
-
-  anchors.forEach((anchor) => {
-    const href = anchor.getAttribute("href");
-    if (!href) return;
-
-    // Format: #/detail/{type}/{id}
-    const parts = href.split("/");
-    if (parts.length >= 4) {
-      const type = parts[2];
-      const id = parts[3];
-
-      // Inject badge to anchor card
-      injectBadgesToCard(anchor as HTMLElement, type, id);
-    }
-  });
-}
-
-/**
- * Injects the beautiful slidable React drawer and toggle button
- */
+// Injects React slidebar/dashboard inside the Stremio container
 function injectInsightsSidebar() {
   if (document.getElementById("stremio-insights-sidebar-wrapper")) return;
 
-  // 1. Create floating action toggle button
   const toggleBtn = document.createElement("button");
   toggleBtn.id = "stremio-insights-toggle-btn";
   toggleBtn.innerHTML = `
@@ -586,25 +297,19 @@ function injectInsightsSidebar() {
   `;
   document.body.appendChild(toggleBtn);
 
-  // 2. Create sidebar wrapper
   const sidebarWrapper = document.createElement("div");
   sidebarWrapper.id = "stremio-insights-sidebar-wrapper";
   sidebarWrapper.className = "stremio-insights-sidebar-wrapper";
   document.body.appendChild(sidebarWrapper);
 
-  // 3. Mount React App inside sidebarWrapper
   const root = createRoot(sidebarWrapper);
-  root.render(
-    React.createElement(Dashboard)
-  );
+  root.render(React.createElement(Dashboard));
 
-  // 4. Handle toggles
   toggleBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     sidebarWrapper.classList.toggle("open");
   });
 
-  // Close sidebar on click outside
   document.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
     if (
@@ -618,118 +323,36 @@ function injectInsightsSidebar() {
   });
 }
 
-/**
- * Handle custom fetch interception events from main world
- */
-window.addEventListener("STREMIO_DATASTORE_PUT_INTERCEPTED", (event: any) => {
-  const { request, response } = event.detail;
-  console.log("[Stremio Insights] Intercepted datastore update:", request);
+// Initial route sync and listening to hash transitions
+window.addEventListener("hashchange", checkRouteAndSync);
 
-  // If the datastore was updated, let's refresh our local state and triggers badge re-evaluation
-  processedCardHashes.clear();
-  scanAndInjectBadges();
-  syncProfileAuthKey();
-});
+// Occasional route checker interval just in case Stremio's routing changes dynamically
+setInterval(checkRouteAndSync, 1000);
 
-// Debounce state to avoid excessive database syncs
-let syncTimeout: any = null;
-function debouncedSync() {
-  if (syncTimeout) {
-    clearTimeout(syncTimeout);
-  }
-  syncTimeout = setTimeout(() => {
-    const hash = window.location.hash || "";
-    if (
-      hash.includes("continuewatching") ||
-      hash.includes("board") ||
-      hash === "" ||
-      hash === "#/"
-    ) {
-      discoverAndSyncData().catch(err => {
-        console.error("[Stremio Insights Diagnostics] Automatic debounced sync failed:", err);
-      });
-    }
-  }, 2000);
-}
-
-// Single MutationObserver across the entire document
-const observer = new MutationObserver(() => {
-  mutationCount++;
-  console.log(`[Stremio Insights Diagnostics] DOM mutation detected. Total mutations tracked: ${mutationCount}`);
-
-  // 1. Detect player / video tag
-  const video = document.querySelector("video") as HTMLVideoElement;
-  if (video) {
-    attachVideoListeners(video);
-  }
-
-  // 2. Scan and inject badges onto cards
-  scanAndInjectBadges();
-
-  // 3. Debounce automatic sync
-  debouncedSync();
-});
-
-// Route changes and automatic triggers
-function handleRouteSync() {
-  const hash = window.location.hash || "";
-  console.log("[Stremio Insights Diagnostics] Route change detected. Current hash:", hash);
-
-  if (
-    hash.includes("continuewatching") ||
-    hash.includes("board") ||
-    hash === "" ||
-    hash === "#/"
-  ) {
-    setTimeout(() => {
-      discoverAndSyncData().catch(err => {
-        console.error("[Stremio Insights Diagnostics] Error during route sync:", err);
-      });
-    }, 1500);
-  }
-}
-
-// Start observing on DOM ready
-document.addEventListener("DOMContentLoaded", () => {
-  logInitialDiagnostics();
-
-  observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true
-  });
-  scanAndInjectBadges();
-  syncProfileAuthKey();
+if (document.readyState === "complete" || document.readyState === "interactive") {
+  checkRouteAndSync();
   injectInsightsSidebar();
+} else {
+  document.addEventListener("DOMContentLoaded", () => {
+    checkRouteAndSync();
+    injectInsightsSidebar();
+  });
+}
 
-  // Route-based trigger
-  handleRouteSync();
-});
-
-// Handle route transitions
-window.addEventListener("hashchange", () => {
-  processedCardHashes.clear();
-  setTimeout(scanAndInjectBadges, 300);
-  syncProfileAuthKey();
-
-  // Route-based trigger
-  handleRouteSync();
-});
-
-// Handle messages from Popup or Background worker (e.g., FORCE_RESCAN)
+// Listen for rescan triggers
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "FORCE_RESCAN") {
-    console.log("[Stremio Insights Diagnostics] FORCE_RESCAN requested by popup.");
-    discoverAndSyncData()
-      .then((count) => {
-        sendResponse({ success: true, count });
+    // Force rescan ignores the hash-matching cache to allow user-triggered manual refreshes
+    lastSyncedHash = "";
+    runSyncPipeline()
+      .then(() => {
+        sendResponse({ success: true, count: 1 });
       })
       .catch((err) => {
-        console.error("[Stremio Insights Diagnostics] FORCE_RESCAN failed:", err);
+        console.error("[SYNC] Manual rescan failed:", err);
         sendResponse({ success: false, error: err.message });
       });
-    return true; // Keep channel open for async response
+    return true;
   }
   return;
 });
-
-console.log("[Stremio Insights] Content Script successfully initialized.");

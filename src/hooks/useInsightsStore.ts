@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { PlaybackEvent, WatchStats } from "../types";
+import { PlaybackEvent } from "../types";
 import { AnalyticsSummary, computeAnalytics } from "../analytics/stats";
 
 interface InsightsFilters {
@@ -39,7 +39,7 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
 
   fetchData: async () => {
     return new Promise<void>((resolve) => {
-      if (typeof chrome === "undefined" || !chrome.runtime || !chrome.runtime.sendMessage) {
+      if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.local) {
         console.warn("[Stremio Insights] Chrome Extension context not found. Using empty stub data.");
         set({
           playbackEvents: [],
@@ -48,56 +48,78 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
         resolve();
         return;
       }
-      // Fetch playback events
-      chrome.runtime.sendMessage({ type: "GET_PLAYBACK_EVENTS" }, (response) => {
-        const events = response && response.success ? response.events : [];
 
-        // Fetch stats
-        chrome.runtime.sendMessage({ type: "GET_STATS" }, (statsResponse) => {
-          const stats = statsResponse && statsResponse.success ? statsResponse.stats : null;
-
-          set({
-            playbackEvents: events,
-            stats: stats || computeAnalytics(events)
-          });
-          resolve();
+      chrome.storage.local.get(["library", "analytics"], (res) => {
+        const library = Array.isArray(res.library) ? res.library : [];
+        const stats = res.analytics || computeAnalytics(library);
+        set({
+          playbackEvents: library,
+          stats
         });
+        resolve();
       });
     });
   },
 
   performSync: async (authKey: string) => {
     set({ syncLoading: true, syncError: null });
-    return new Promise<number>((resolve, reject) => {
-      if (typeof chrome === "undefined" || !chrome.runtime || !chrome.runtime.sendMessage) {
+    return new Promise<number>(async (resolve, reject) => {
+      // Direct call fallback for Content Script context (Sidebar UI)
+      if (typeof window !== "undefined" && (window as any).runSyncPipeline) {
+        try {
+          await (window as any).runSyncPipeline();
+          await get().fetchData();
+          set({ syncLoading: false });
+          resolve(1);
+        } catch (err: any) {
+          set({ syncLoading: false, syncError: err.message || "Sync failed" });
+          reject(err);
+        }
+        return;
+      }
+
+      if (typeof chrome === "undefined" || !chrome.tabs) {
         set({ syncLoading: false, syncError: "Extension context not found" });
         reject(new Error("Extension context not found"));
         return;
       }
-      chrome.runtime.sendMessage(
-        { type: "STREMIO_SYNC_REQUEST", payload: { authKey } },
-        async (response) => {
-          set({ syncLoading: false });
-          if (response && response.success) {
-            await get().fetchData();
-            resolve(response.importedCount);
+
+      chrome.tabs.query({ url: "https://web.stremio.com/*" }, (stremioTabs) => {
+        if (stremioTabs && stremioTabs.length > 0) {
+          const targetTab = stremioTabs.find(tab => tab.active) || stremioTabs[0];
+          if (targetTab.id) {
+            chrome.tabs.sendMessage(targetTab.id, { type: "FORCE_RESCAN" }, async (response) => {
+              set({ syncLoading: false });
+              if (chrome.runtime.lastError) {
+                set({ syncError: "Could not communicate with Stremio tab." });
+                reject(new Error("Communication failed"));
+              } else if (response && response.success) {
+                await get().fetchData();
+                resolve(1);
+              } else {
+                set({ syncError: "Sync did not return success status." });
+                reject(new Error("Sync failed"));
+              }
+            });
           } else {
-            const err = response ? response.error : "Sync failed";
-            set({ syncError: err });
-            reject(new Error(err));
+            set({ syncLoading: false, syncError: "Stremio tab could not be identified." });
+            reject(new Error("Stremio tab could not be identified."));
           }
+        } else {
+          set({ syncLoading: false, syncError: "No Stremio tab is currently open." });
+          reject(new Error("No open Stremio tab found."));
         }
-      );
+      });
     });
   },
 
   clearHistory: async () => {
     return new Promise<void>((resolve) => {
-      if (typeof chrome === "undefined" || !chrome.runtime || !chrome.runtime.sendMessage) {
+      if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.local) {
         resolve();
         return;
       }
-      chrome.runtime.sendMessage({ type: "CLEAR_HISTORY" }, async () => {
+      chrome.storage.local.remove(["library", "analytics", "lastSync"], async () => {
         await get().fetchData();
         resolve();
       });
@@ -142,7 +164,7 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         const matchesTitle = event.title.toLowerCase().includes(q);
-        const matchesImdb = event.imdb_id.toLowerCase().includes(q);
+        const matchesImdb = (event.imdbId || event.imdb_id || "").toLowerCase().includes(q);
         const matchesGenre = event.genres?.some((g) => g.toLowerCase().includes(q)) ?? false;
         const matchesYear = event.year ? String(event.year).includes(q) : false;
 
