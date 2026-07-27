@@ -3,6 +3,7 @@ export type ContentType = "movie" | "series";
 export interface PlaybackEvent {
   id?: number; // Auto-increment database id
   imdb_id: string; // Movie ID (e.g. tt123) or Episode ID (e.g. tt123:1:1)
+  imdbId?: string; // Stremio style IMDb ID compatibility
   parent_id?: string; // Series ID for episodes (e.g. tt123)
   title: string;
   type: ContentType;
@@ -18,6 +19,9 @@ export interface PlaybackEvent {
   genres?: string[];
   year?: number;
   directors?: string[];
+  firstWatched?: number; // Unix timestamp in milliseconds
+  lastWatched?: number; // Unix timestamp in milliseconds
+  source?: string; // e.g., "stremio" or "player"
 }
 
 export interface WatchStats {

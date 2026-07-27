@@ -1,4 +1,5 @@
 import { PlaybackEvent, WatchStats } from "../types";
+import { normalizeTimestamp } from "../utils/date";
 
 export interface AnalyticsSummary extends WatchStats {
   topGenres: { name: string; count: number }[];
@@ -54,13 +55,18 @@ export function computeAnalytics(events: PlaybackEvent[]): AnalyticsSummary {
     };
   }
 
-  // Sort events by started_at ascending to identify first recorded easily
-  const chronEvents = [...events].sort((a, b) =>
-    new Date(a.started_at).getTime() - new Date(b.started_at).getTime()
-  );
+  // Helpers to get correct timestamps, preferring firstWatched and lastWatched
+  const getFirstWatchedTime = (e: PlaybackEvent) => e.firstWatched ? normalizeTimestamp(e.firstWatched) : normalizeTimestamp(e.started_at);
+  const getLastWatchedTime = (e: PlaybackEvent) => e.lastWatched ? normalizeTimestamp(e.lastWatched) : normalizeTimestamp(e.finished_at || e.started_at);
+
+  // Sort events by firstRecorded/firstWatched ascending to identify first recorded easily
+  const chronEvents = [...events].sort((a, b) => getFirstWatchedTime(a) - getFirstWatchedTime(b));
 
   stats.firstRecorded = chronEvents[0] || null;
-  stats.lastWatched = chronEvents[chronEvents.length - 1] || null;
+
+  // Identify last watched based on highest lastWatched/finished_at timestamp
+  const chronLastEvents = [...events].sort((a, b) => getLastWatchedTime(a) - getLastWatchedTime(b));
+  stats.lastWatched = chronLastEvents[chronLastEvents.length - 1] || null;
 
   const movieIdsSeen = new Set<string>();
   const seriesIdsSeen = new Set<string>();
@@ -103,8 +109,9 @@ export function computeAnalytics(events: PlaybackEvent[]): AnalyticsSummary {
     }
     titleCounts[titleKey].count += (event.watch_count || 1);
 
-    // Timestamps activity
-    const startDate = new Date(event.started_at);
+    // Timestamps activity using firstWatched or started_at
+    const startTimestamp = event.firstWatched ? normalizeTimestamp(event.firstWatched) : normalizeTimestamp(event.started_at);
+    const startDate = new Date(startTimestamp);
     if (!isNaN(startDate.getTime())) {
       // Heatmap (day: 0-6, hour: 0-23 in local/provided time)
       // Since date formatting timezone is America/Argentina/Buenos_Aires, we should idealize the date in that TZ
@@ -172,10 +179,10 @@ export function computeAnalytics(events: PlaybackEvent[]): AnalyticsSummary {
 }
 
 export function groupEventsIntoTimeline(events: PlaybackEvent[]) {
-  // Sort descending by start date
-  const sorted = [...events].sort((a, b) =>
-    new Date(b.started_at).getTime() - new Date(a.started_at).getTime()
-  );
+  const getFirstWatchedTime = (e: PlaybackEvent) => e.firstWatched ? normalizeTimestamp(e.firstWatched) : normalizeTimestamp(e.started_at);
+
+  // Sort descending by start date/firstWatched
+  const sorted = [...events].sort((a, b) => getFirstWatchedTime(b) - getFirstWatchedTime(a));
 
   const timeline: Record<string, Record<string, PlaybackEvent[]>> = {};
 
@@ -185,7 +192,8 @@ export function groupEventsIntoTimeline(events: PlaybackEvent[]) {
   ];
 
   for (const event of sorted) {
-    const d = new Date(event.started_at);
+    const timestamp = event.firstWatched ? normalizeTimestamp(event.firstWatched) : normalizeTimestamp(event.started_at);
+    const d = new Date(timestamp);
     if (isNaN(d.getTime())) continue;
 
     const year = String(d.getFullYear());

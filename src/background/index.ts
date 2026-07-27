@@ -12,6 +12,7 @@ import {
 import { PlaybackEvent, StremioLibraryItem } from "../types";
 import { computeAnalytics } from "../analytics/stats";
 import { convertToCSV, convertToJSON } from "../utils/export";
+import { normalizeTimestamp, mergeWatchHistory } from "../utils/date";
 
 // On install, we initialize state and set standard defaults
 chrome.runtime.onInstalled.addListener(() => {
@@ -146,6 +147,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
  * Recovers previous watch history from api.strem.io datastore API.
  */
 async function performStremioRecoverySync(authKey: string): Promise<number> {
+  console.log("[Stremio Insights SW] Fetching datastoreMeta to extract authoritative timestamps...");
+  const metaResponse = await fetch("https://api.strem.io/api/datastoreMeta", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ authKey, collection: "libraryItem" })
+  });
+
+  const metaMap = new Map<string, number>();
+  if (metaResponse.ok) {
+    const metaJson = await metaResponse.json();
+    if (metaJson && Array.isArray(metaJson.result)) {
+      for (const [id, timestamp] of metaJson.result) {
+        if (id && typeof timestamp === "number") {
+          metaMap.set(id, timestamp);
+        }
+      }
+    }
+  } else {
+    console.error("[Stremio Insights SW] Failed to fetch datastoreMeta:", metaResponse.statusText);
+  }
+
+  console.log("[Stremio Insights SW] Fetching full library details from datastoreGet...");
   const response = await fetch("https://api.strem.io/api/datastoreGet", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -159,46 +182,105 @@ async function performStremioRecoverySync(authKey: string): Promise<number> {
   const jsonResponse = await response.json();
   const libraryItems: StremioLibraryItem[] = jsonResponse.result || [];
 
+  // Read all existing local events to allow repairs/migration and merge matching items
+  const existingEvents = await getAllPlaybackEvents();
+  const existingEventsMap = new Map<string, PlaybackEvent>();
+  for (const e of existingEvents) {
+    existingEventsMap.set(e.imdb_id, e);
+  }
+
+  // Task 8: Migration & Repair Logic
+  let repairedCount = 0;
+  for (const e of existingEvents) {
+    // Detect source === "stremio" (or missing source which indicates historical stremio imports)
+    if (e.source === "stremio" || !e.source) {
+      const stremioTimestamp = metaMap.get(e.imdb_id);
+      if (stremioTimestamp) {
+        const previousLastWatched = e.lastWatched || normalizeTimestamp(e.finished_at || e.started_at);
+
+        e.firstWatched = stremioTimestamp;
+        e.lastWatched = stremioTimestamp;
+        e.started_at = new Date(stremioTimestamp).toISOString();
+        e.finished_at = new Date(stremioTimestamp).toISOString();
+        e.source = "stremio";
+        e.imdbId = e.imdb_id;
+
+        // Task 9: Exact logging format requirement
+        console.log(`[SYNC]\n${e.imdb_id}\npreviousLastWatched=${previousLastWatched}\nstremioLastWatched=${stremioTimestamp}\nfinalLastWatched=${stremioTimestamp}`);
+
+        await updatePlaybackEvent(e);
+        existingEventsMap.set(e.imdb_id, e); // Update in memory map
+        repairedCount++;
+      }
+    }
+  }
+  console.log(`[Stremio Insights SW] Successfully repaired/migrated ${repairedCount} existing records from datastoreMeta.`);
+
   let importedCount = 0;
 
   for (const item of libraryItems) {
     // Only import items with a watched history
     const state = item.state;
-    if (state && (state.timesWatched && state.timesWatched > 0 || state.lastWatched)) {
+    if (state && ((state.timesWatched && state.timesWatched > 0) || state.lastWatched)) {
       const imdb_id = item._id;
-      const started_at = state.lastWatched || new Date().toISOString();
-      const finished_at = state.lastWatched || new Date().toISOString();
+      const stremioTimestamp = metaMap.get(imdb_id);
+      const rawTimestamp = stremioTimestamp || (state.lastWatched ? normalizeTimestamp(state.lastWatched) : 0);
 
-      // Check if this item is already recorded to avoid duplicates
-      const existing = await getPlaybackEventsByImdbId(imdb_id);
-      const isRecorded = existing.some(e => {
-        const diff = Math.abs(new Date(e.started_at).getTime() - new Date(started_at).getTime());
-        return diff < 120000; // 2 minutes
-      });
+      // Never use Date.now() for Stremio history imports
+      if (rawTimestamp === 0) {
+        console.warn(`[Stremio Insights SW] Skipping ${imdb_id} - no valid watch timestamp found.`);
+        continue;
+      }
 
-      if (!isRecorded) {
-        // Build duration & time watched estimates
-        const duration = state.duration || 3600000; // default 1 hour
-        const time_watched = state.timeWatched || duration;
-        const progress = duration > 0 ? Math.min(100, Math.round((time_watched / duration) * 100)) : 100;
+      const existing = existingEventsMap.get(imdb_id);
+
+      // Build duration & time watched estimates
+      const duration = state.duration || 3600000; // default 1 hour
+      const time_watched = state.timeWatched || duration;
+      const progress = duration > 0 ? Math.min(100, Math.round((time_watched / duration) * 100)) : 100;
+
+      if (!existing) {
+        const mergedTimes = mergeWatchHistory(undefined, rawTimestamp);
 
         const event: PlaybackEvent = {
           imdb_id,
+          imdbId: imdb_id,
           title: item.name,
           type: item.type || "movie",
-          started_at,
-          finished_at,
+          started_at: new Date(mergedTimes.firstWatched).toISOString(),
+          finished_at: new Date(mergedTimes.lastWatched).toISOString(),
           progress,
           watch_count: state.timesWatched || 1,
           duration,
           time_watched,
-          // Placeholder genres or metadata can be updated by active crawling later
-          genres: ["Historical"],
-          year: state.lastWatched ? new Date(state.lastWatched).getFullYear() : undefined
+          genres: item.genres || ["Historical"],
+          year: new Date(mergedTimes.lastWatched).getFullYear(),
+          firstWatched: mergedTimes.firstWatched,
+          lastWatched: mergedTimes.lastWatched,
+          source: "stremio"
         };
+
+        console.log(`[SYNC]\n${imdb_id}\npreviousLastWatched=0\nstremioLastWatched=${rawTimestamp}\nfinalLastWatched=${mergedTimes.lastWatched}`);
 
         await addPlaybackEvent(event);
         importedCount++;
+      } else {
+        // Existing record merging
+        const mergedTimes = mergeWatchHistory(existing, rawTimestamp);
+        const previousLastWatched = existing.lastWatched || normalizeTimestamp(existing.finished_at || existing.started_at);
+
+        existing.firstWatched = mergedTimes.firstWatched;
+        existing.lastWatched = mergedTimes.lastWatched;
+        existing.started_at = new Date(mergedTimes.firstWatched).toISOString();
+        existing.finished_at = new Date(mergedTimes.lastWatched).toISOString();
+        existing.source = "stremio";
+        existing.imdbId = imdb_id;
+        existing.progress = Math.max(existing.progress, progress);
+        existing.watch_count = Math.max(existing.watch_count || 0, state.timesWatched || 1);
+
+        console.log(`[SYNC]\n${imdb_id}\npreviousLastWatched=${previousLastWatched}\nstremioLastWatched=${rawTimestamp}\nfinalLastWatched=${mergedTimes.lastWatched}`);
+
+        await updatePlaybackEvent(existing);
       }
     }
   }
