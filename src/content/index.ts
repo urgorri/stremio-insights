@@ -374,10 +374,11 @@ export async function runSyncPipeline() {
         const cached = metadataCache[cleanId];
         const isCacheValid = cached && (Date.now() - cached.timestamp < 24 * 60 * 60 * 1000);
 
-        if (isCacheValid) {
+        if (isCacheValid && cached?.meta) {
           cacheHitsCount++;
           // Track coverage for cached items
-          if (cached.meta.genres.length === 0 || cached.meta.genres.includes("Historical")) {
+          const cachedGenres = cached.meta.genres || [];
+          if (cachedGenres.length === 0 || cachedGenres.includes("Historical")) {
             stats.missingGenresCount++;
           }
           if (!cached.meta.director) {
@@ -399,7 +400,7 @@ export async function runSyncPipeline() {
         try {
           const meta = await fetchEnrichedMetadata(imdbId, type, title, stats);
           // Only cache if the fetched metadata has some actual content (e.g., is not empty/failed)
-          const isFailedFetch = !meta || (meta.genres.length === 1 && meta.genres[0] === "Historical" && !meta.director && meta.releaseYear === "Unknown");
+          const isFailedFetch = !meta || ((meta.genres || []).length === 1 && meta.genres[0] === "Historical" && !meta.director && meta.releaseYear === "Unknown");
           if (meta && !isFailedFetch) {
             // Save back to cache
             updatedMetadataCache[cleanId] = {

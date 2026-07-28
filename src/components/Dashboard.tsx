@@ -249,7 +249,10 @@ export const Dashboard: React.FC = () => {
                 <div className="flex justify-between">
                   <span className="text-gray-400">Favorite Directors:</span>
                   <span className="font-semibold text-purple-300">
-                    {stats?.favoriteDirectors?.join(", ") || "None recorded"}
+                    {stats?.favoriteDirectors?.map(d => {
+                      const parts = d.trim().split(/\s+/);
+                      return parts[parts.length - 1];
+                    }).join(", ") || "None recorded"}
                   </span>
                 </div>
               </div>
