@@ -82,41 +82,21 @@ describe("Analytics & Statistics", () => {
     expect(timeline["2026"]["June"][0].title).toBe("Alien Earth");
   });
 
-  it("should calculate heatmap for the current year only, mapping days of the week horizontally and months of the year vertically", () => {
+  it("should calculate heatmap for the current year only, mapping months horizontally and days vertically", () => {
     const currentYear = new Date().getFullYear();
 
-    // Find a date in the current year that is a Sunday in January.
-    // Let's loop days to find a Sunday in January of current year.
-    let sundayJan: Date | null = null;
-    for (let day = 1; day <= 31; day++) {
-      const date = new Date(currentYear, 0, day, 12, 0, 0);
-      if (date.getDay() === 0) {
-        sundayJan = date;
-        break;
-      }
-    }
-
-    // Find a Sunday in January in the previous year.
-    let prevSundayJan: Date | null = null;
-    for (let day = 1; day <= 31; day++) {
-      const date = new Date(currentYear - 1, 0, day, 12, 0, 0);
-      if (date.getDay() === 0) {
-        prevSundayJan = date;
-        break;
-      }
-    }
-
-    if (!sundayJan || !prevSundayJan) {
-      throw new Error("Could not find Sunday in January");
-    }
+    // Let's create an event on Jan 5th of current year.
+    const jan5th = new Date(currentYear, 0, 5, 12, 0, 0);
+    // Let's create an event on Jan 5th of previous year (should be ignored).
+    const prevJan5th = new Date(currentYear - 1, 0, 5, 12, 0, 0);
 
     const testEvents: PlaybackEvent[] = [
       {
         imdb_id: "tt111",
         title: "Current Year Movie",
         type: "movie",
-        started_at: sundayJan.toISOString(),
-        finished_at: sundayJan.toISOString(),
+        started_at: jan5th.toISOString(),
+        finished_at: jan5th.toISOString(),
         progress: 100,
         watch_count: 1,
         duration: 3600000,
@@ -126,8 +106,8 @@ describe("Analytics & Statistics", () => {
         imdb_id: "tt222",
         title: "Previous Year Movie",
         type: "movie",
-        started_at: prevSundayJan.toISOString(),
-        finished_at: prevSundayJan.toISOString(),
+        started_at: prevJan5th.toISOString(),
+        finished_at: prevJan5th.toISOString(),
         progress: 100,
         watch_count: 1,
         duration: 3600000,
@@ -137,13 +117,13 @@ describe("Analytics & Statistics", () => {
 
     const summary = computeAnalytics(testEvents);
 
-    // Day 0 (Sunday), Month 1 (January)
-    const currentYearCell = summary.heatmap.find(item => item.day === 0 && item.month === 1);
+    // Month 1 (January), Day 5
+    const currentYearCell = summary.heatmap.find(item => item.month === 1 && item.day === 5);
     expect(currentYearCell).toBeDefined();
     expect(currentYearCell?.count).toBe(1); // Only current year movie should be counted
 
     // All other cells should be 0
-    const otherCells = summary.heatmap.filter(item => !(item.day === 0 && item.month === 1));
+    const otherCells = summary.heatmap.filter(item => !(item.month === 1 && item.day === 5));
     otherCells.forEach(cell => {
       expect(cell.count).toBe(0);
     });

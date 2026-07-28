@@ -533,32 +533,54 @@ export const Dashboard: React.FC = () => {
             </div>
 
             {/* Watch Heatmap Grid */}
-            <div className="bg-[#151622] p-4 rounded-lg border border-gray-800/80 space-y-3 text-xs overflow-x-auto">
+            <div id="watch-heatmap-card" className="bg-[#151622] p-4 rounded-lg border border-gray-800/80 space-y-3 text-xs overflow-x-auto">
               <h3 className="font-bold text-gray-300 flex items-center gap-1">
-                Watch Heatmap <span className="text-[9px] text-gray-500 font-normal ml-1">({new Date().getFullYear()} - Days of week vs Months of year)</span>
+                Watch Heatmap <span className="text-[9px] text-gray-500 font-normal ml-1">({new Date().getFullYear()} - Months vs Days of Month)</span>
               </h3>
-              <div className="flex flex-col gap-1 min-w-[240px]">
-                {/* Days of Week Header (Horizontal) */}
-                <div className="flex gap-1 mb-1 text-[9px] text-gray-500 font-semibold">
-                  {/* Invisible spacer matching the month label width */}
-                  <span className="w-6 shrink-0" />
-                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((dayName) => (
-                    <span key={dayName} className="w-6 text-center shrink-0">{dayName}</span>
-                  ))}
+              <div className="flex flex-col gap-0.5 min-w-[280px]">
+                {/* Months Header (Horizontal) */}
+                <div className="flex gap-0.5 mb-1 text-[8px] text-gray-500 font-bold">
+                  {/* Invisible spacer matching the day label width */}
+                  <span className="w-5 shrink-0" />
+                  {Array.from({ length: 12 }).map((_, m) => {
+                    const monthLabel = String(m + 1).padStart(2, "0");
+                    return (
+                      <span key={m} className="w-5 text-center shrink-0">{monthLabel}</span>
+                    );
+                  })}
                 </div>
 
-                {/* 12 Months Rows (Vertical) */}
-                {Array.from({ length: 12 }).map((_, m) => {
-                  const monthNum = m + 1; // 1 to 12
-                  const monthLabel = String(monthNum).padStart(2, "0"); // "01", "02", etc.
+                {/* 31 Days Rows (Vertical) */}
+                {Array.from({ length: 31 }).map((_, d) => {
+                  const dayNum = d + 1;
+                  const dayLabel = String(dayNum).padStart(2, "0");
                   return (
-                    <div key={m} className="flex gap-1 items-center">
-                      {/* Month Row Label */}
-                      <span className="w-6 text-[9px] text-gray-400 font-semibold shrink-0 text-right pr-1">{monthLabel}</span>
+                    <div key={d} className="flex gap-0.5 items-center">
+                      {/* Day Row Label */}
+                      <span className="w-5 text-[8px] text-gray-400 font-bold shrink-0 text-right pr-1">{dayLabel}</span>
 
-                      {/* 7 Days Columns */}
-                      {Array.from({ length: 7 }).map((_, d) => {
-                        const cell = stats?.heatmap?.find((item) => item.day === d && item.month === monthNum);
+                      {/* 12 Months Columns */}
+                      {Array.from({ length: 12 }).map((_, m) => {
+                        const monthNum = m + 1;
+
+                        // Check if this date is valid in the current year
+                        const currentYear = new Date().getFullYear();
+                        const checkDate = new Date(currentYear, monthNum - 1, dayNum);
+                        const isValid =
+                          checkDate.getFullYear() === currentYear &&
+                          checkDate.getMonth() === monthNum - 1 &&
+                          checkDate.getDate() === dayNum;
+
+                        if (!isValid) {
+                          return (
+                            <div
+                              key={m}
+                              className="w-5 h-5 shrink-0 bg-transparent"
+                            />
+                          );
+                        }
+
+                        const cell = stats?.heatmap?.find((item) => item.month === monthNum && item.day === dayNum);
                         const count = cell?.count || 0;
 
                         // Select color depth based on watch frequency
@@ -568,8 +590,7 @@ export const Dashboard: React.FC = () => {
                         else if (count >= 6 && count < 10) bgClass = "bg-purple-500/80";
                         else if (count >= 10) bgClass = "bg-purple-400 shadow-[0_0_4px_#a855f7]";
 
-                        // Day name for tooltip
-                        const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+                        // Tooltip info
                         const monthsNames = [
                           "January", "February", "March", "April", "May", "June",
                           "July", "August", "September", "October", "November", "December"
@@ -577,9 +598,9 @@ export const Dashboard: React.FC = () => {
 
                         return (
                           <div
-                            key={d}
-                            title={`${monthsNames[m]} (${monthLabel}) - ${days[d]}: ${count} watch events`}
-                            className={`w-6 h-6 rounded-sm transition-colors cursor-help flex items-center justify-center ${bgClass}`}
+                            key={m}
+                            title={`${monthsNames[m]} ${dayLabel}: ${count} watch events`}
+                            className={`w-5 h-5 rounded-sm transition-colors cursor-help flex items-center justify-center shrink-0 ${bgClass}`}
                           />
                         );
                       })}
