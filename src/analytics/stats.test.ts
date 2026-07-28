@@ -81,4 +81,51 @@ describe("Analytics & Statistics", () => {
     expect(timeline["2026"]["June"]).toHaveLength(1);
     expect(timeline["2026"]["June"][0].title).toBe("Alien Earth");
   });
+
+  it("should calculate heatmap for the current year only, mapping months horizontally and days vertically", () => {
+    const currentYear = new Date().getFullYear();
+
+    // Let's create an event on Jan 5th of current year.
+    const jan5th = new Date(currentYear, 0, 5, 12, 0, 0);
+    // Let's create an event on Jan 5th of previous year (should be ignored).
+    const prevJan5th = new Date(currentYear - 1, 0, 5, 12, 0, 0);
+
+    const testEvents: PlaybackEvent[] = [
+      {
+        imdb_id: "tt111",
+        title: "Current Year Movie",
+        type: "movie",
+        started_at: jan5th.toISOString(),
+        finished_at: jan5th.toISOString(),
+        progress: 100,
+        watch_count: 1,
+        duration: 3600000,
+        time_watched: 3600000,
+      },
+      {
+        imdb_id: "tt222",
+        title: "Previous Year Movie",
+        type: "movie",
+        started_at: prevJan5th.toISOString(),
+        finished_at: prevJan5th.toISOString(),
+        progress: 100,
+        watch_count: 1,
+        duration: 3600000,
+        time_watched: 3600000,
+      }
+    ];
+
+    const summary = computeAnalytics(testEvents);
+
+    // Month 1 (January), Day 5
+    const currentYearCell = summary.heatmap.find(item => item.month === 1 && item.day === 5);
+    expect(currentYearCell).toBeDefined();
+    expect(currentYearCell?.count).toBe(1); // Only current year movie should be counted
+
+    // All other cells should be 0
+    const otherCells = summary.heatmap.filter(item => !(item.month === 1 && item.day === 5));
+    otherCells.forEach(cell => {
+      expect(cell.count).toBe(0);
+    });
+  });
 });

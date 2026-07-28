@@ -7,7 +7,7 @@ export interface AnalyticsSummary extends WatchStats {
   recentlyWatched: PlaybackEvent[];
   avgImdbRating: string;
   moviesPerMonth: Record<string, number>;
-  heatmap: { day: number; hour: number; count: number }[];
+  heatmap: { month: number; day: number; count: number }[];
   topDecades: { decade: string; count: number }[];
   topGenres: { name: string; count: number }[];
   topDirectors: { name: string; count: number }[];
@@ -152,28 +152,31 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
     }
   });
 
-  // Heatmap: Day vs Hour (7 x 24)
-  const heatmap: { day: number; hour: number; count: number }[] = [];
+  // Heatmap: Month of year vs Day of month (12 x 31) only for current year
+  const heatmap: { month: number; day: number; count: number }[] = [];
   const heatmapGrid: Record<string, number> = {};
-  for (let d = 0; d < 7; d++) {
-    for (let h = 0; h < 24; h++) {
-      heatmapGrid[`${d}-${h}`] = 0;
+  for (let m = 1; m <= 12; m++) {
+    for (let d = 1; d <= 31; d++) {
+      heatmapGrid[`${m}-${d}`] = 0;
     }
   }
+  const currentYear = new Date().getFullYear();
   library.forEach(item => {
     const ts = getWatchTime(item);
     if (ts) {
       const d = new Date(ts);
       if (!isNaN(d.getTime())) {
-        const day = d.getDay();
-        const hour = d.getHours();
-        heatmapGrid[`${day}-${hour}`] = (heatmapGrid[`${day}-${hour}`] || 0) + 1;
+        if (d.getFullYear() === currentYear) {
+          const month = d.getMonth() + 1;
+          const day = d.getDate();
+          heatmapGrid[`${month}-${day}`] = (heatmapGrid[`${month}-${day}`] || 0) + 1;
+        }
       }
     }
   });
   Object.entries(heatmapGrid).forEach(([key, count]) => {
-    const [day, hour] = key.split("-").map(Number);
-    heatmap.push({ day, hour, count });
+    const [month, day] = key.split("-").map(Number);
+    heatmap.push({ month, day, count });
   });
 
   // Top decades

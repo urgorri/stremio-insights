@@ -533,25 +533,54 @@ export const Dashboard: React.FC = () => {
             </div>
 
             {/* Watch Heatmap Grid */}
-            <div className="bg-[#151622] p-4 rounded-lg border border-gray-800/80 space-y-3 text-xs overflow-x-auto">
+            <div id="watch-heatmap-card" className="bg-[#151622] p-4 rounded-lg border border-gray-800/80 space-y-3 text-xs overflow-x-auto">
               <h3 className="font-bold text-gray-300 flex items-center gap-1">
-                Watch Heatmap <span className="text-[9px] text-gray-500 font-normal ml-1">(Days of week vs Hours of day)</span>
+                Watch Heatmap <span className="text-[9px] text-gray-500 font-normal ml-1">({new Date().getFullYear()} - Months vs Days of Month)</span>
               </h3>
-              <div className="flex flex-col gap-1 min-w-[320px]">
-                {/* Hours Label Header */}
-                <div className="flex gap-0.5 pl-5 mb-1 text-[8px] text-gray-500">
-                  {Array.from({ length: 24 }).map((_, h) => (
-                    <span key={h} className="w-2.5 text-center">{String(h).padStart(2, "0")}</span>
-                  ))}
+              <div className="flex flex-col gap-0.5 min-w-[280px]">
+                {/* Months Header (Horizontal) */}
+                <div className="flex gap-0.5 mb-1 text-[8px] text-gray-500 font-bold">
+                  {/* Invisible spacer matching the day label width */}
+                  <span className="w-5 shrink-0" />
+                  {Array.from({ length: 12 }).map((_, m) => {
+                    const monthLabel = String(m + 1).padStart(2, "0");
+                    return (
+                      <span key={m} className="w-5 text-center shrink-0">{monthLabel}</span>
+                    );
+                  })}
                 </div>
 
-                {/* 7 Days Grid rows */}
-                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((dayName, d) => {
+                {/* 31 Days Rows (Vertical) */}
+                {Array.from({ length: 31 }).map((_, d) => {
+                  const dayNum = d + 1;
+                  const dayLabel = String(dayNum).padStart(2, "0");
                   return (
                     <div key={d} className="flex gap-0.5 items-center">
-                      <span className="w-5 text-[8px] text-gray-400 shrink-0">{dayName}</span>
-                      {Array.from({ length: 24 }).map((_, h) => {
-                        const cell = stats?.heatmap?.find((item) => item.day === d && item.hour === h);
+                      {/* Day Row Label */}
+                      <span className="w-5 text-[8px] text-gray-400 font-bold shrink-0 text-right pr-1">{dayLabel}</span>
+
+                      {/* 12 Months Columns */}
+                      {Array.from({ length: 12 }).map((_, m) => {
+                        const monthNum = m + 1;
+
+                        // Check if this date is valid in the current year
+                        const currentYear = new Date().getFullYear();
+                        const checkDate = new Date(currentYear, monthNum - 1, dayNum);
+                        const isValid =
+                          checkDate.getFullYear() === currentYear &&
+                          checkDate.getMonth() === monthNum - 1 &&
+                          checkDate.getDate() === dayNum;
+
+                        if (!isValid) {
+                          return (
+                            <div
+                              key={m}
+                              className="w-5 h-5 shrink-0 bg-transparent"
+                            />
+                          );
+                        }
+
+                        const cell = stats?.heatmap?.find((item) => item.month === monthNum && item.day === dayNum);
                         const count = cell?.count || 0;
 
                         // Select color depth based on watch frequency
@@ -561,11 +590,17 @@ export const Dashboard: React.FC = () => {
                         else if (count >= 6 && count < 10) bgClass = "bg-purple-500/80";
                         else if (count >= 10) bgClass = "bg-purple-400 shadow-[0_0_4px_#a855f7]";
 
+                        // Tooltip info
+                        const monthsNames = [
+                          "January", "February", "March", "April", "May", "June",
+                          "July", "August", "September", "October", "November", "December"
+                        ];
+
                         return (
                           <div
-                            key={h}
-                            title={`${dayName} at ${String(h).padStart(2, "0")}:00 : ${count} watch events`}
-                            className={`w-2.5 h-2.5 rounded-sm transition-colors cursor-help ${bgClass}`}
+                            key={m}
+                            title={`${monthsNames[m]} ${dayLabel}: ${count} watch events`}
+                            className={`w-5 h-5 rounded-sm transition-colors cursor-help flex items-center justify-center shrink-0 ${bgClass}`}
                           />
                         );
                       })}
