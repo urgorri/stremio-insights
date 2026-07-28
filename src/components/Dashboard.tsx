@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useInsightsStore } from "../hooks/useInsightsStore";
-import { formatBuenosAiresDate, formatBuenosAiresDateOnly } from "../utils/date";
+import { formatBuenosAiresDate, formatBuenosAiresDateOnly, normalizeReleaseYear } from "../utils/date";
 import { groupEventsIntoTimeline } from "../analytics/stats";
 import {
   Tv,
@@ -138,10 +138,13 @@ export const Dashboard: React.FC = () => {
   const uniqueYears = Array.from(
     new Set(
       getFilteredEvents()
-        .map((e) => e.year)
-        .filter(Boolean)
+        .map((e) => normalizeReleaseYear(e.releaseYear || e.year))
     )
-  ).sort((a, b) => b! - a!);
+  ).sort((a, b) => {
+    if (a === "Unknown") return 1;
+    if (b === "Unknown") return -1;
+    return b.localeCompare(a);
+  });
 
   if (isPopup && isStremioTabActive === false) {
     return (
@@ -246,7 +249,10 @@ export const Dashboard: React.FC = () => {
                 <div className="flex justify-between">
                   <span className="text-gray-400">Favorite Directors:</span>
                   <span className="font-semibold text-purple-300">
-                    {stats?.favoriteDirectors?.join(", ") || "None recorded"}
+                    {stats?.favoriteDirectors?.map(d => {
+                      const parts = d.trim().split(/\s+/);
+                      return parts[parts.length - 1];
+                    }).join(", ") || "None recorded"}
                   </span>
                 </div>
               </div>
@@ -349,22 +355,32 @@ export const Dashboard: React.FC = () => {
                   No playback sessions found matching criteria.
                 </div>
               ) : (
-                Object.entries(timeline).map(([year, monthsObj]) => (
-                  <div key={year} className="space-y-2">
-                    <h2 className="text-sm font-black text-purple-400 border-b border-purple-500/20 pb-0.5 tracking-wider">
-                      {year}
-                    </h2>
-                    <div className="pl-2 space-y-3">
-                      {Object.entries(monthsObj).map(([month, events]) => (
-                        <div key={month} className="space-y-1.5">
-                          <h3 className="text-xs font-bold text-blue-400/90 tracking-wide uppercase">
-                            {month}
-                          </h3>
-                          <div className="pl-2 border-l border-gray-800 space-y-2">
+                Object.entries(timeline)
+                  .sort(([yearA], [yearB]) => Number(yearA) - Number(yearB))
+                  .map(([year, monthsObj]) => {
+                    const months = [
+                      "January", "February", "March", "April", "May", "June",
+                      "July", "August", "September", "October", "November", "December"
+                    ];
+                    const sortedMonths = Object.entries(monthsObj).sort(
+                      ([monthA], [monthB]) => months.indexOf(monthA) - months.indexOf(monthB)
+                    );
+                    return (
+                      <div key={year} className="space-y-2">
+                        <h2 className="text-sm font-black text-purple-400 border-b border-purple-500/20 pb-0.5 tracking-wider">
+                          {year}
+                        </h2>
+                        <div className="pl-2 space-y-3">
+                          {sortedMonths.map(([month, events]) => (
+                            <div key={month} className="space-y-1.5">
+                              <h3 className="text-xs font-bold text-blue-400/90 tracking-wide uppercase">
+                                {month}
+                              </h3>
+                              <div className="pl-2 border-l border-gray-800 space-y-2">
                             {events.map((event, index) => {
                               const watchTs = event.lastWatched || event.firstWatched || event.finished_at || event.started_at;
                               const formattedWatchDate = watchTs ? formatBuenosAiresDateOnly(watchTs) : "Unknown";
-                              const dispYear = event.releaseYear || (event.year ? String(event.year) : "Unknown");
+                              const dispYear = normalizeReleaseYear(event.releaseYear || event.year);
 
                               return (
                                 <div
@@ -418,7 +434,8 @@ export const Dashboard: React.FC = () => {
                       ))}
                     </div>
                   </div>
-                ))
+                );
+              })
               )}
             </div>
           </div>
