@@ -18,7 +18,12 @@ export interface PlaybackEvent {
   time_watched: number; // in milliseconds
   genres?: string[];
   year?: number;
+  releaseYear?: string;
+  director?: string | null;
   directors?: string[];
+  actors?: string[];
+  plot?: string;
+  runtime?: string;
   firstWatched?: number; // Unix timestamp in milliseconds
   lastWatched?: number; // Unix timestamp in milliseconds
   source?: string; // e.g., "stremio" or "player"

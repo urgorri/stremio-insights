@@ -67,9 +67,11 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
     stats.totalWatchCount += (item.watch_count || 1);
     stats.estimatedWatchTime += (item.time_watched || 0);
 
-    if (item.year) {
-      const yr = Number(item.year);
-      if (!isNaN(yr)) {
+    const yrStr = item.releaseYear || (item.year ? String(item.year) : "");
+    if (yrStr) {
+      const m = yrStr.match(/\d{4}/);
+      if (m) {
+        const yr = Number(m[0]);
         libraryYearCounts[yr] = (libraryYearCounts[yr] || 0) + 1;
         yearCounts[yr] = (yearCounts[yr] || 0) + 1;
       }
@@ -81,10 +83,12 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
       });
     }
 
-    if (item.directors) {
+    if (item.directors && item.directors.length > 0) {
       item.directors.forEach(d => {
         directorCounts[d] = (directorCounts[d] || 0) + 1;
       });
+    } else if (item.director) {
+      directorCounts[item.director] = (directorCounts[item.director] || 0) + 1;
     }
 
     const titleKey = item.title;
@@ -175,9 +179,11 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
   // Top decades
   const decadeCounts: Record<string, number> = {};
   library.forEach(item => {
-    if (item.year) {
-      const yr = Number(item.year);
-      if (!isNaN(yr)) {
+    const yrStr = item.releaseYear || (item.year ? String(item.year) : "");
+    if (yrStr) {
+      const m = yrStr.match(/\d{4}/);
+      if (m) {
+        const yr = Number(m[0]);
         const decade = `${Math.floor(yr / 10) * 10}s`;
         decadeCounts[decade] = (decadeCounts[decade] || 0) + 1;
       }

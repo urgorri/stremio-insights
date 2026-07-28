@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useInsightsStore } from "../hooks/useInsightsStore";
-import { formatBuenosAiresDate } from "../utils/date";
+import { formatBuenosAiresDate, formatBuenosAiresDateOnly } from "../utils/date";
 import { groupEventsIntoTimeline } from "../analytics/stats";
 import {
   Tv,
@@ -35,51 +35,42 @@ export const Dashboard: React.FC = () => {
     getFilteredEvents
   } = useInsightsStore();
 
-  const [activeTab, setActiveTab] = useState<"overview" | "timeline" | "analytics" | "sync">("overview");
-  const [authKey, setAuthKey] = useState("");
-  const [syncSuccessMsg, setSyncSuccessMsg] = useState<string | null>(null);
-  const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const [activeTab, setActiveTab] = useState<"overview" | "timeline" | "analytics" | "settings">("overview");
+  const [isStremioTabActive, setIsStremioTabActive] = useState<boolean | null>(null);
 
-  const handleManualSyncNow = async () => {
-    setIsManualSyncing(true);
-    chrome.tabs.query({ url: "https://web.stremio.com/*" }, (stremioTabs) => {
-      if (stremioTabs && stremioTabs.length > 0) {
-        // Find the active Stremio tab if there is one, or default to the first one found
-        const targetTab = stremioTabs.find(tab => tab.active) || stremioTabs[0];
-        if (targetTab.id) {
-          chrome.tabs.sendMessage(targetTab.id, { type: "FORCE_RESCAN" }, (response) => {
-            setIsManualSyncing(false);
-            if (chrome.runtime.lastError) {
-              console.error("[Stremio Insights] Error during manual FORCE_RESCAN:", chrome.runtime.lastError);
-              alert("Could not communicate with Stremio tab. Make sure web.stremio.com is open and active.");
-            } else if (response && response.success) {
-              alert(`Successfully synchronized ${response.count} watch history records from Stremio tab!`);
-              fetchData();
-            } else {
-              alert("Sync completed, but no new records were found.");
-              fetchData();
-            }
-          });
-        } else {
-          setIsManualSyncing(false);
-          alert("Could not resolve Stremio tab ID.");
-        }
-      } else {
-        setIsManualSyncing(false);
-        alert("No open Stremio tab found. Please open https://web.stremio.com in your browser.");
-      }
-    });
-  };
+  const isPopup = typeof window !== "undefined" && window.location.protocol === "chrome-extension:";
 
   useEffect(() => {
     fetchData();
-    // Pre-fill authKey if available in chrome storage
-    if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
-      chrome.storage.local.get(["stremio_auth_key"], (res) => {
-        if (res.stremio_auth_key) {
-          setAuthKey(res.stremio_auth_key);
-        }
-      });
+
+    // Auto-sync if running inside extension popup on a web.stremio.com active tab
+    if (isPopup) {
+      console.log("[SYNC]\nPopup opened");
+      if (typeof chrome !== "undefined" && chrome.tabs) {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          const activeTab = tabs[0];
+          const url = activeTab?.url || "";
+          if (url.startsWith("https://web.stremio.com")) {
+            console.log("[SYNC]\nActive tab = web.stremio.com");
+            setIsStremioTabActive(true);
+            console.log("[SYNC]\nAuto synchronization started");
+
+            // Auto-trigger sync using stored auth key (auto-extracted by content script)
+            if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+              chrome.storage.local.get(["stremio_auth_key"], async (res) => {
+                const key = res.stremio_auth_key || "";
+                try {
+                  await performSync(key);
+                } catch (err) {
+                  console.error("[SYNC] Auto sync failed:", err);
+                }
+              });
+            }
+          } else {
+            setIsStremioTabActive(false);
+          }
+        });
+      }
     }
 
     // Listen for real-time synchronization updates
@@ -98,17 +89,6 @@ export const Dashboard: React.FC = () => {
       }
     };
   }, [fetchData]);
-
-  const handleSync = async () => {
-    if (!authKey.trim()) return;
-    try {
-      setSyncSuccessMsg(null);
-      const imported = await performSync(authKey);
-      setSyncSuccessMsg(`Successfully imported ${imported} historical watch sessions!`);
-    } catch (e: any) {
-      console.error(e);
-    }
-  };
 
   const handleExport = async (format: "csv" | "json") => {
     chrome.runtime.sendMessage(
@@ -163,6 +143,18 @@ export const Dashboard: React.FC = () => {
     )
   ).sort((a, b) => b! - a!);
 
+  if (isPopup && isStremioTabActive === false) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full bg-[#0d0e15] text-white p-6 text-center space-y-4" style={{ width: "380px", height: "550px" }}>
+        <AlertCircle className="w-12 h-12 text-purple-500 animate-pulse" />
+        <h2 className="text-base font-bold text-gray-200">Stremio is not active</h2>
+        <p className="text-xs text-gray-400 max-w-xs leading-relaxed">
+          Open Stremio Continue Watching to synchronize.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full bg-[#0d0e15] text-white font-sans overflow-hidden">
       {/* Header */}
@@ -173,29 +165,11 @@ export const Dashboard: React.FC = () => {
             Stremio Insights
           </h1>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleManualSyncNow}
-            disabled={isManualSyncing}
-            className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-md bg-purple-600 hover:bg-purple-500 text-white transition-all shadow-md ${isManualSyncing ? "opacity-60 cursor-not-allowed" : ""}`}
-            title="Scan & Sync active Stremio tab now"
-          >
-            <RefreshCw className={`w-3 h-3 ${isManualSyncing ? "animate-spin" : ""}`} />
-            <span>{isManualSyncing ? "Syncing..." : "Sync Now"}</span>
-          </button>
-          <button
-            onClick={() => fetchData()}
-            className="p-1.5 hover:bg-gray-800 rounded transition-colors text-gray-400 hover:text-white"
-            title="Refresh statistics"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
-        </div>
       </div>
 
       {/* Tabs Menu */}
       <div className="flex border-b border-gray-800 bg-[#12131c] text-xs">
-        {(["overview", "timeline", "analytics", "sync"] as const).map((tab) => (
+        {(["overview", "timeline", "analytics", "settings"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -387,41 +361,58 @@ export const Dashboard: React.FC = () => {
                             {month}
                           </h3>
                           <div className="pl-2 border-l border-gray-800 space-y-2">
-                            {events.map((event, index) => (
-                              <div
-                                key={index}
-                                className="bg-[#12131c]/50 hover:bg-[#151622] p-2.5 rounded border border-gray-800/40 hover:border-purple-500/20 transition-all flex justify-between items-start gap-2"
-                              >
-                                <div className="space-y-0.5 min-w-0">
-                                  <div className="flex items-center gap-1.5">
-                                    {event.type === "movie" ? (
-                                      <Film className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                            {events.map((event, index) => {
+                              const watchTs = event.lastWatched || event.firstWatched || event.finished_at || event.started_at;
+                              const formattedWatchDate = watchTs ? formatBuenosAiresDateOnly(watchTs) : "Unknown";
+                              const dispYear = event.releaseYear || (event.year ? String(event.year) : "Unknown");
+
+                              return (
+                                <div
+                                  key={index}
+                                  className="bg-[#12131c]/50 hover:bg-[#151622] p-2.5 rounded border border-gray-800/40 hover:border-purple-500/20 transition-all flex items-center gap-3"
+                                >
+                                  {/* Poster */}
+                                  <div className="w-10 h-14 bg-gray-800 rounded overflow-hidden shrink-0 flex items-center justify-center border border-gray-700/30">
+                                    {event.poster ? (
+                                      <img src={event.poster} alt={event.title} className="w-full h-full object-cover" />
                                     ) : (
-                                      <Tv className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                                      <Film className="w-5 h-5 text-gray-600" />
                                     )}
-                                    <span className="font-bold text-xs text-gray-200 truncate">
-                                      {event.title}
-                                    </span>
                                   </div>
-                                  {event.type === "series" && (
-                                    <div className="text-[10px] text-gray-400 font-medium pl-5">
-                                      S{event.season} E{event.episode} {event.episode_title}
+
+                                  {/* Info */}
+                                  <div className="space-y-1 min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5">
+                                      {event.type === "movie" ? (
+                                        <Film className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                                      ) : (
+                                        <Tv className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                                      )}
+                                      <span className="font-bold text-xs text-gray-200 truncate">
+                                        {event.title} {dispYear && dispYear !== "Unknown" ? `(${dispYear})` : ""}
+                                      </span>
                                     </div>
-                                  )}
-                                  <div className="text-[9px] text-gray-500 pl-5">
-                                    Watched: {formatBuenosAiresDate(event.started_at)}
+                                    {event.type === "series" && (
+                                      <div className="text-[10px] text-gray-400 font-medium pl-5">
+                                        S{event.season} E{event.episode} {event.episode_title}
+                                      </div>
+                                    )}
+                                    <div className="text-[10px] text-gray-400 pl-5">
+                                      Last watched: <span className="font-semibold text-purple-400">{formattedWatchDate}</span>
+                                    </div>
+                                  </div>
+
+                                  <div className="text-right shrink-0">
+                                    <div className="text-[10px] font-bold text-purple-400">
+                                      {event.progress}%
+                                    </div>
+                                    <div className="text-[9px] text-gray-500">
+                                      Count: {event.watch_count || 1}
+                                    </div>
                                   </div>
                                 </div>
-                                <div className="text-right shrink-0">
-                                  <div className="text-[10px] font-bold text-purple-400">
-                                    {event.progress}%
-                                  </div>
-                                  <div className="text-[9px] text-gray-500">
-                                    Count: {event.watch_count || 1}
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       ))}
@@ -462,30 +453,47 @@ export const Dashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Top Directors and Top Years panels side by side */}
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="bg-[#151622] p-3 rounded-lg border border-gray-800/80 space-y-2">
-                <h4 className="font-bold text-gray-300">Top Directors</h4>
-                <div className="space-y-1.5 mt-2">
-                  {stats?.topDirectors?.slice(0, 3).map((dir) => (
-                    <div key={dir.name} className="flex justify-between text-[11px] text-gray-300">
-                      <span className="truncate max-w-[100px]">{dir.name}</span>
-                      <span className="font-bold text-purple-400 shrink-0">{dir.count}</span>
+            {/* Top Directors as a gorgeous bar chart */}
+            <div className="bg-[#151622] p-4 rounded-lg border border-gray-800/80 space-y-3 text-xs">
+              <h3 className="font-bold text-gray-300 flex items-center gap-1.5">
+                Top Directors (Movies per Director)
+              </h3>
+              <div className="space-y-2">
+                {stats?.topDirectors?.slice(0, 5).map((dir, index) => {
+                  const maxCount = stats.topDirectors[0]?.count || 1;
+                  const percentage = Math.round((dir.count / maxCount) * 100);
+                  return (
+                    <div key={dir.name} className="space-y-1">
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-gray-300 font-medium">
+                          {index + 1}. {dir.name}
+                        </span>
+                        <span className="text-purple-400 font-bold">
+                          {dir.count} {dir.count === 1 ? "movie" : "movies"}
+                        </span>
+                      </div>
+                      <div className="w-full bg-black/50 h-2 rounded overflow-hidden border border-gray-800">
+                        <div
+                          className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full rounded"
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
                     </div>
-                  )) || <div className="text-gray-500">None</div>}
-                </div>
+                  );
+                }) || <div className="text-gray-500 py-2">No director statistics available.</div>}
               </div>
+            </div>
 
-              <div className="bg-[#151622] p-3 rounded-lg border border-gray-800/80 space-y-2">
-                <h4 className="font-bold text-gray-300">Top Release Years</h4>
-                <div className="space-y-1.5 mt-2">
-                  {stats?.topYears?.slice(0, 3).map((y) => (
-                    <div key={y.name} className="flex justify-between text-[11px] text-gray-300">
-                      <span>{y.name}</span>
-                      <span className="font-bold text-blue-400">{y.count}</span>
-                    </div>
-                  )) || <div className="text-gray-500">None</div>}
-                </div>
+            {/* Top Years panel */}
+            <div className="bg-[#151622] p-4 rounded-lg border border-gray-800/80 space-y-3 text-xs">
+              <h3 className="font-bold text-gray-300">Top Release Years</h3>
+              <div className="space-y-1.5 mt-2">
+                {stats?.topYears?.slice(0, 5).map((y, index) => (
+                  <div key={y.name} className="flex justify-between text-[11px] text-gray-300 py-1 border-b border-gray-800/40 last:border-0">
+                    <span>{index + 1}. {y.name}</span>
+                    <span className="font-bold text-blue-400">{y.count} titles</span>
+                  </div>
+                )) || <div className="text-gray-500">None</div>}
               </div>
             </div>
 
@@ -552,59 +560,8 @@ export const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {activeTab === "sync" && (
+        {activeTab === "settings" && (
           <div className="space-y-4 text-xs">
-            {/* Stremio Profile Sync / datastoreGet */}
-            <div className="bg-[#151622] p-4 rounded-lg border border-gray-800/80 space-y-3">
-              <h3 className="font-bold text-gray-300 flex items-center gap-1.5">
-                <RefreshCw className="w-4 h-4 text-purple-400" /> Stremio Account Sync
-              </h3>
-              <p className="text-[11px] text-gray-400 leading-relaxed">
-                Import your pre-existing watched items directly from the Stremio cloud datastore. We pre-fill your credential if logged in!
-              </p>
-
-              <div className="space-y-2">
-                <label className="text-[10px] text-gray-400 font-bold block">AuthKey / Credentials</label>
-                <input
-                  type="password"
-                  placeholder="Paste Stremio Auth Key or credentials..."
-                  value={authKey}
-                  onChange={(e) => setAuthKey(e.target.value)}
-                  className="w-full bg-black/40 border border-gray-800 rounded py-2 px-3 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
-                />
-              </div>
-
-              <button
-                onClick={handleSync}
-                disabled={syncLoading || !authKey.trim()}
-                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded py-2 text-xs font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
-              >
-                {syncLoading ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Synchronizing...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5" /> Recover Historical Data
-                  </>
-                )}
-              </button>
-
-              {syncSuccessMsg && (
-                <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded p-2.5 flex items-start gap-2 text-[11px]">
-                  <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>{syncSuccessMsg}</span>
-                </div>
-              )}
-
-              {syncError && (
-                <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded p-2.5 flex items-start gap-2 text-[11px]">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>{syncError}</span>
-                </div>
-              )}
-            </div>
-
             {/* Local persistence & exports */}
             <div className="bg-[#151622] p-4 rounded-lg border border-gray-800/80 space-y-3">
               <h3 className="font-bold text-gray-300 flex items-center gap-1.5">
