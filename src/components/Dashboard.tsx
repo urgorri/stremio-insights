@@ -415,11 +415,6 @@ export const Dashboard: React.FC = () => {
                                         {event.title} {dispYear && dispYear !== "Unknown" ? `(${dispYear})` : ""}
                                       </span>
                                     </div>
-                                    {event.type === "series" && (
-                                      <div className="text-[10px] text-gray-400 font-medium pl-5">
-                                        S{event.season} E{event.episode} {event.episode_title}
-                                      </div>
-                                    )}
                                     <div className="text-[10px] text-gray-400 pl-5">
                                       Last watched: <span className="font-semibold text-purple-400">{formattedWatchDate}</span>
                                     </div>
