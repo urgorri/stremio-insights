@@ -17,7 +17,8 @@ import {
   TrendingUp,
   Filter,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  ExternalLink
 } from "lucide-react";
 
 export const Dashboard: React.FC = () => {
@@ -154,6 +155,19 @@ export const Dashboard: React.FC = () => {
         <p className="text-xs text-gray-400 max-w-xs leading-relaxed">
           Open Stremio Continue Watching to synchronize.
         </p>
+        <button
+          onClick={() => {
+            if (typeof chrome !== "undefined" && chrome.tabs && chrome.tabs.create) {
+              chrome.tabs.create({ url: "https://web.stremio.com/#/continuewatching" });
+            } else {
+              window.open("https://web.stremio.com/#/continuewatching", "_blank");
+            }
+          }}
+          className="mt-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded font-bold text-xs flex items-center gap-1.5 transition-all shadow-md hover:shadow-purple-500/20"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+          Open Stremio
+        </button>
       </div>
     );
   }
