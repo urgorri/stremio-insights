@@ -108,3 +108,58 @@ export function mergeWatchHistory(
 export function formatDate(timestamp: number | string | Date): string {
   return formatBuenosAiresDate(timestamp);
 }
+
+/**
+ * Normalizes release year string to a 4-digit year or "Unknown".
+ * "2005-"      -> "2005"
+ * "1999-2007"  -> "1999"
+ * "2026"       -> "2026"
+ * ""           -> "Unknown"
+ * null         -> "Unknown"
+ * undefined    -> "Unknown"
+ */
+export function normalizeReleaseYear(yearInput: any): string {
+  if (yearInput === null || yearInput === undefined) return "Unknown";
+  const str = String(yearInput).trim();
+  if (!str) return "Unknown";
+  const match = str.match(/\d{4}/);
+  if (match) {
+    return match[0];
+  }
+  return "Unknown";
+}
+
+/**
+ * Formats a date using America/Argentina/Buenos_Aires timezone
+ * and returns only the date part: DD-MM-YYYY
+ */
+export function formatBuenosAiresDateOnly(dateInput: string | Date | number): string {
+  const date = new Date(dateInput);
+  if (isNaN(date.getTime())) return "";
+
+  try {
+    const dtf = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Argentina/Buenos_Aires",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    });
+
+    const parts = dtf.formatToParts(date);
+    const partMap = parts.reduce((acc, p) => {
+      acc[p.type] = p.value;
+      return acc;
+    }, {} as Record<string, string>);
+
+    const day = partMap.day || "01";
+    const month = partMap.month || "01";
+    const year = partMap.year || "2026";
+
+    return `${day}-${month}-${year}`;
+  } catch (error) {
+    // Fallback if Intl fails
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    const d = new Date(dateInput);
+    return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
+  }
+}

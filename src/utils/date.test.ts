@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { formatBuenosAiresDate, normalizeTimestamp, mergeWatchHistory, formatDate } from "./date";
+import {
+  formatBuenosAiresDate,
+  normalizeTimestamp,
+  mergeWatchHistory,
+  formatDate,
+  normalizeReleaseYear,
+  formatBuenosAiresDateOnly
+} from "./date";
 
 describe("Date Formatting - America/Argentina/Buenos_Aires", () => {
   it("should format dates in the correct DD-MM-YYYY HH:mm format for Buenos Aires", () => {
@@ -64,5 +71,21 @@ describe("Utility Functions - Timestamps and Merging", () => {
     const merged = mergeWatchHistory(existing, stremioTimestamp);
     expect(merged.firstWatched).toBe(1700000000000);
     expect(merged.lastWatched).toBe(1783997771783); // Kept newer timestamp
+  });
+});
+
+describe("New Utility Functions - normalizeReleaseYear and formatBuenosAiresDateOnly", () => {
+  it("should normalize release year correctly", () => {
+    expect(normalizeReleaseYear("2005-")).toBe("2005");
+    expect(normalizeReleaseYear("1999-2007")).toBe("1999");
+    expect(normalizeReleaseYear("2026")).toBe("2026");
+    expect(normalizeReleaseYear("")).toBe("Unknown");
+    expect(normalizeReleaseYear(null)).toBe("Unknown");
+    expect(normalizeReleaseYear(undefined)).toBe("Unknown");
+  });
+
+  it("should format dates as DD-MM-YYYY in Buenos Aires timezone", () => {
+    const dateUtc = "2026-07-25T22:31:00.000Z"; // 19:31 in Buenos Aires (-3 hours)
+    expect(formatBuenosAiresDateOnly(dateUtc)).toBe("25-07-2026");
   });
 });
