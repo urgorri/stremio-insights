@@ -382,10 +382,17 @@ export const Dashboard: React.FC = () => {
                               const formattedWatchDate = watchTs ? formatBuenosAiresDateOnly(watchTs) : "Unknown";
                               const dispYear = normalizeReleaseYear(event.releaseYear || event.year);
 
+                              const id = event.imdbId || event.imdb_id;
+                              const cleanId = event.type === "series" ? (event.parent_id || id?.split(":")[0]) : id;
+                              const stremioUrl = `https://web.stremio.com/#/detail/${event.type}/${cleanId}`;
+
                               return (
-                                <div
+                                <a
                                   key={index}
-                                  className="bg-[#12131c]/50 hover:bg-[#151622] p-2.5 rounded border border-gray-800/40 hover:border-purple-500/20 transition-all flex items-center gap-3"
+                                  href={stremioUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="bg-[#12131c]/50 hover:bg-[#151622] p-2.5 rounded border border-gray-800/40 hover:border-purple-500/20 transition-all flex items-center gap-3 cursor-pointer block"
                                 >
                                   {/* Poster */}
                                   <div className="w-10 h-14 bg-gray-800 rounded overflow-hidden shrink-0 flex items-center justify-center border border-gray-700/30">
@@ -426,7 +433,7 @@ export const Dashboard: React.FC = () => {
                                       Count: {event.watch_count || 1}
                                     </div>
                                   </div>
-                                </div>
+                                </a>
                               );
                             })}
                           </div>
