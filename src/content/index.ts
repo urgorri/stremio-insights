@@ -36,6 +36,7 @@ async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", t
   const cleanId = imdbId.split(":")[0];
   const urlType = type === "series" ? "series" : "movie";
 
+  let titleVal = "";
   let genres: string[] = [];
   let director: string | null = null;
   let directors: string[] | undefined = undefined;
@@ -49,6 +50,7 @@ async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", t
 
   // Custom hardcoded override for tt0117951 Twelve Monkeys as requested by prompt
   if (cleanId === "tt0117951") {
+    titleVal = "Twelve Monkeys";
     genres = ["Sci-Fi", "Mystery", "Thriller"];
     director = "Terry Gilliam";
     actors = ["Bruce Willis", "Madeleine Stowe", "Brad Pitt"];
@@ -68,6 +70,7 @@ async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", t
     console.log(`[METADATA]\n${cleanId}\ngenres=${JSON.stringify(["Sci-Fi", "Thriller"])}\ndirector=${JSON.stringify(director)}`);
 
     return {
+      title: titleVal,
       genres,
       director,
       directors,
@@ -100,6 +103,7 @@ async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", t
 
     if (meta) {
       sourceUsed = "cinemeta";
+      if (meta.name) titleVal = meta.name;
       if (Array.isArray(meta.genre)) genres = meta.genre;
       else if (Array.isArray(meta.genres)) genres = meta.genres;
 
@@ -162,6 +166,9 @@ async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", t
             if (actors.length === 0 && omdbData.Actors && omdbData.Actors !== "N/A") {
               actors = omdbData.Actors.split(",").map((a: string) => a.trim());
             }
+            if (!titleVal && omdbData.Title && omdbData.Title !== "N/A") {
+              titleVal = omdbData.Title;
+            }
             if (releaseYear === "Unknown") {
               releaseYear = normalizeReleaseYear(omdbData.Year || omdbData.Released);
             }
@@ -197,6 +204,7 @@ async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", t
   console.log(`[METADATA]\n${cleanId}\ngenres=${JSON.stringify(genres)}\ndirector=${JSON.stringify(director)}`);
 
   return {
+    title: titleVal,
     genres,
     director,
     directors,
@@ -266,7 +274,15 @@ export async function runSyncPipeline() {
       if (Array.isArray(tuple) && tuple.length >= 2) {
         const [id, ts] = tuple;
         if (id && typeof ts === "number") {
-          datastoreMap.set(id, ts);
+          let cleanId = id;
+          if (cleanId.includes("libraryItem_")) {
+            const parts = cleanId.split("libraryItem_");
+            cleanId = parts[parts.length - 1];
+          } else if (cleanId.includes("_")) {
+            const parts = cleanId.split("_");
+            cleanId = parts[parts.length - 1];
+          }
+          datastoreMap.set(cleanId, ts);
         }
       }
     });
@@ -274,6 +290,7 @@ export async function runSyncPipeline() {
     // 2. Fetch datastoreGet (authoritative source of library items metadata)
     let datastoreGetList: any[] = [];
     try {
+      // Fetch "library" collection
       const getResponse = await fetch("https://api.strem.io/api/datastoreGet", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -281,7 +298,20 @@ export async function runSyncPipeline() {
       });
       if (getResponse.ok) {
         const getJson = await getResponse.json();
-        datastoreGetList = Array.isArray(getJson) ? getJson : (getJson && Array.isArray(getJson.result) ? getJson.result : []);
+        const list = Array.isArray(getJson) ? getJson : (getJson && Array.isArray(getJson.result) ? getJson.result : []);
+        datastoreGetList.push(...list);
+      }
+
+      // Fetch "libraryItem" collection as fallback/supplement
+      const getResponse2 = await fetch("https://api.strem.io/api/datastoreGet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ authKey, collection: "libraryItem" })
+      });
+      if (getResponse2.ok) {
+        const getJson2 = await getResponse2.json();
+        const list2 = Array.isArray(getJson2) ? getJson2 : (getJson2 && Array.isArray(getJson2.result) ? getJson2.result : []);
+        datastoreGetList.push(...list2);
       }
     } catch (err) {
       console.error("[SYNC] Failed to fetch datastoreGet gracefully:", err);
@@ -291,7 +321,16 @@ export async function runSyncPipeline() {
     const datastoreGetMap = new Map<string, any>();
     datastoreGetList.forEach((item: any) => {
       if (item && item._id) {
-        datastoreGetMap.set(item._id, item);
+        let id = item._id;
+        if (id.includes("libraryItem_")) {
+          const parts = id.split("libraryItem_");
+          id = parts[parts.length - 1];
+        } else if (id.includes("_")) {
+          const parts = id.split("_");
+          id = parts[parts.length - 1];
+        }
+        datastoreGetMap.set(id, item);
+        datastoreGetMap.set(item._id, item); // Also keep original _id
       }
     });
 
@@ -485,7 +524,7 @@ export async function runSyncPipeline() {
       }
 
       const getMeta = datastoreGetMap.get(imdbId);
-      const title = getMeta?.name || existing?.title || (imdbId === "tt0117951" ? "Twelve Monkeys" : `Unknown (${imdbId})`);
+      const title = meta.title || getMeta?.name || existing?.title || (imdbId === "tt0117951" ? "Twelve Monkeys" : `Unknown (${imdbId})`);
       const type = imdbId.includes(":") ? "series" : (getMeta?.type || existing?.type || "movie");
 
       const duration = getMeta?.state?.duration || existing?.duration || 0;
