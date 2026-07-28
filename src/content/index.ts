@@ -15,8 +15,10 @@ interface SyncStats {
   unknownReleaseYearsCount: number;
 }
 
-function needsRepair(item: any): boolean {
+function needsRepair(item: any, correctType?: string): boolean {
   if (!item) return true;
+
+  if (correctType && item.type !== correctType) return true;
 
   // 1. Repair genres: length == 1 and genres[0] == "Historical"
   const hasHistoricalGenre = Array.isArray(item.genres) && item.genres.length === 1 && item.genres[0] === "Historical";
@@ -273,11 +275,19 @@ export async function runSyncPipeline() {
 
     // Build map of datastoreMeta: imdbId -> lastWatchedTimestamp (UNIX in ms)
     const datastoreMap = new Map<string, number>();
+    const idTypeMap = new Map<string, "movie" | "series">();
     datastoreMetaList.forEach((tuple: any) => {
       if (Array.isArray(tuple) && tuple.length >= 2) {
         const [id, ts] = tuple;
         if (id && typeof ts === "number") {
           let cleanId = id;
+          let detectedType: "movie" | "series" | null = null;
+          if (cleanId.includes("_series_") || cleanId.startsWith("series_")) {
+            detectedType = "series";
+          } else if (cleanId.includes("_movie_") || cleanId.startsWith("movie_")) {
+            detectedType = "movie";
+          }
+
           if (cleanId.includes("libraryItem_")) {
             const parts = cleanId.split("libraryItem_");
             cleanId = parts[parts.length - 1];
@@ -285,6 +295,9 @@ export async function runSyncPipeline() {
           if (cleanId.includes("_")) {
             const parts = cleanId.split("_");
             cleanId = parts[parts.length - 1];
+          }
+          if (detectedType) {
+            idTypeMap.set(cleanId, detectedType);
           }
           datastoreMap.set(cleanId, ts);
         }
@@ -294,11 +307,11 @@ export async function runSyncPipeline() {
     // 2. Fetch datastoreGet (authoritative source of library items metadata)
     let datastoreGetList: any[] = [];
     try {
-      // Fetch "library" collection
+      // Fetch "library" collection with all: true
       const getResponse = await fetch("https://api.strem.io/api/datastoreGet", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ authKey, collection: "library" })
+        body: JSON.stringify({ authKey, collection: "library", all: true })
       });
       if (getResponse.ok) {
         const getJson = await getResponse.json();
@@ -306,11 +319,11 @@ export async function runSyncPipeline() {
         datastoreGetList.push(...list);
       }
 
-      // Fetch "libraryItem" collection as fallback/supplement
+      // Fetch "libraryItem" collection with all: true as fallback/supplement
       const getResponse2 = await fetch("https://api.strem.io/api/datastoreGet", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ authKey, collection: "libraryItem" })
+        body: JSON.stringify({ authKey, collection: "libraryItem", all: true })
       });
       if (getResponse2.ok) {
         const getJson2 = await getResponse2.json();
@@ -406,7 +419,8 @@ export async function runSyncPipeline() {
     // Prepare items that need metadata fetch or repair
     const itemsToFetch = datastoreKeys.filter(imdbId => {
       const existing = existingMap.get(imdbId);
-      return !existing || needsRepair(existing);
+      const correctType = idTypeMap.get(imdbId) || datastoreGetMap.get(imdbId)?.type;
+      return !existing || needsRepair(existing, correctType);
     });
 
     console.log(`[SYNC] Out of ${datastoreKeys.length} items, ${itemsToFetch.length} need metadata fetch/repair.`);
@@ -415,8 +429,21 @@ export async function runSyncPipeline() {
     const fetchResults = await Promise.all(
       itemsToFetch.map(async (imdbId) => {
         const cleanId = imdbId.split(":")[0];
+        let type: "movie" | "series" = imdbId.includes(":") ? "series" : "movie";
+        const getMeta = datastoreGetMap.get(imdbId);
+        if (getMeta && getMeta.type) {
+          type = getMeta.type;
+        } else {
+          const detected = idTypeMap.get(imdbId);
+          if (detected) {
+            type = detected;
+          }
+        }
+
         const cached = metadataCache[cleanId];
-        const isCacheValid = cached && (Date.now() - cached.timestamp < 24 * 60 * 60 * 1000);
+        // Invalidate cache if cached item type is different from the detected/correct type
+        const isCacheTypeMismatch = cached?.meta && cached.meta.type && cached.meta.type !== type;
+        const isCacheValid = cached && !isCacheTypeMismatch && (Date.now() - cached.timestamp < 24 * 60 * 60 * 1000);
 
         if (isCacheValid && cached?.meta) {
           cacheHitsCount++;
@@ -435,11 +462,6 @@ export async function runSyncPipeline() {
           return { imdbId, meta: cached.meta };
         }
 
-        let type: "movie" | "series" = imdbId.includes(":") ? "series" : "movie";
-        const getMeta = datastoreGetMap.get(imdbId);
-        if (getMeta && getMeta.type) {
-          type = getMeta.type;
-        }
         const title = getMeta?.name || `Unknown (${imdbId})`;
         try {
           const meta = await fetchEnrichedMetadata(imdbId, type, title, stats);
@@ -530,7 +552,7 @@ export async function runSyncPipeline() {
 
       const getMeta = datastoreGetMap.get(imdbId);
       const title = meta.title || getMeta?.name || existing?.title || (imdbId === "tt0117951" ? "Twelve Monkeys" : `Unknown (${imdbId})`);
-      const type = imdbId.includes(":") ? "series" : (getMeta?.type || meta?.type || existing?.type || "movie");
+      const type = imdbId.includes(":") ? "series" : (getMeta?.type || meta?.type || idTypeMap.get(imdbId) || existing?.type || "movie");
 
       const duration = getMeta?.state?.duration || existing?.duration || 0;
       const time_watched = getMeta?.state?.timeWatched || existing?.time_watched || 0;
