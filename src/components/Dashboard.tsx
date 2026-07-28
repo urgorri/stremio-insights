@@ -535,23 +535,30 @@ export const Dashboard: React.FC = () => {
             {/* Watch Heatmap Grid */}
             <div className="bg-[#151622] p-4 rounded-lg border border-gray-800/80 space-y-3 text-xs overflow-x-auto">
               <h3 className="font-bold text-gray-300 flex items-center gap-1">
-                Watch Heatmap <span className="text-[9px] text-gray-500 font-normal ml-1">(Days of week vs Hours of day)</span>
+                Watch Heatmap <span className="text-[9px] text-gray-500 font-normal ml-1">({new Date().getFullYear()} - Days of week vs Months of year)</span>
               </h3>
-              <div className="flex flex-col gap-1 min-w-[320px]">
-                {/* Hours Label Header */}
-                <div className="flex gap-0.5 pl-5 mb-1 text-[8px] text-gray-500">
-                  {Array.from({ length: 24 }).map((_, h) => (
-                    <span key={h} className="w-2.5 text-center">{String(h).padStart(2, "0")}</span>
+              <div className="flex flex-col gap-1 min-w-[240px]">
+                {/* Days of Week Header (Horizontal) */}
+                <div className="flex gap-1 mb-1 text-[9px] text-gray-500 font-semibold">
+                  {/* Invisible spacer matching the month label width */}
+                  <span className="w-6 shrink-0" />
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((dayName) => (
+                    <span key={dayName} className="w-6 text-center shrink-0">{dayName}</span>
                   ))}
                 </div>
 
-                {/* 7 Days Grid rows */}
-                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((dayName, d) => {
+                {/* 12 Months Rows (Vertical) */}
+                {Array.from({ length: 12 }).map((_, m) => {
+                  const monthNum = m + 1; // 1 to 12
+                  const monthLabel = String(monthNum).padStart(2, "0"); // "01", "02", etc.
                   return (
-                    <div key={d} className="flex gap-0.5 items-center">
-                      <span className="w-5 text-[8px] text-gray-400 shrink-0">{dayName}</span>
-                      {Array.from({ length: 24 }).map((_, h) => {
-                        const cell = stats?.heatmap?.find((item) => item.day === d && item.hour === h);
+                    <div key={m} className="flex gap-1 items-center">
+                      {/* Month Row Label */}
+                      <span className="w-6 text-[9px] text-gray-400 font-semibold shrink-0 text-right pr-1">{monthLabel}</span>
+
+                      {/* 7 Days Columns */}
+                      {Array.from({ length: 7 }).map((_, d) => {
+                        const cell = stats?.heatmap?.find((item) => item.day === d && item.month === monthNum);
                         const count = cell?.count || 0;
 
                         // Select color depth based on watch frequency
@@ -561,11 +568,18 @@ export const Dashboard: React.FC = () => {
                         else if (count >= 6 && count < 10) bgClass = "bg-purple-500/80";
                         else if (count >= 10) bgClass = "bg-purple-400 shadow-[0_0_4px_#a855f7]";
 
+                        // Day name for tooltip
+                        const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+                        const monthsNames = [
+                          "January", "February", "March", "April", "May", "June",
+                          "July", "August", "September", "October", "November", "December"
+                        ];
+
                         return (
                           <div
-                            key={h}
-                            title={`${dayName} at ${String(h).padStart(2, "0")}:00 : ${count} watch events`}
-                            className={`w-2.5 h-2.5 rounded-sm transition-colors cursor-help ${bgClass}`}
+                            key={d}
+                            title={`${monthsNames[m]} (${monthLabel}) - ${days[d]}: ${count} watch events`}
+                            className={`w-6 h-6 rounded-sm transition-colors cursor-help flex items-center justify-center ${bgClass}`}
                           />
                         );
                       })}
