@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { PlaybackEvent } from "../types";
 import { AnalyticsSummary, computeAnalytics } from "../analytics/stats";
+import { normalizeReleaseYear } from "../utils/date";
 
 interface InsightsFilters {
   type: "all" | "movie" | "series";
@@ -155,7 +156,8 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
 
       // 3. Year filter
       if (filters.year) {
-        if (String(event.year) !== filters.year) {
+        const eventNormYear = normalizeReleaseYear(event.releaseYear || event.year);
+        if (eventNormYear !== filters.year) {
           return false;
         }
       }

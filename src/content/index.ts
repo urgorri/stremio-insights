@@ -22,12 +22,12 @@ function needsRepair(item: any): boolean {
   const hasHistoricalGenre = Array.isArray(item.genres) && item.genres.length === 1 && item.genres[0] === "Historical";
   const missingGenres = !item.genres || !Array.isArray(item.genres) || item.genres.length === 0;
 
-  // 2. Repair director: director == null
-  const missingDirector = item.director === null || item.director === undefined;
+  // 2. Repair director: director == null (only for movies!)
+  const missingDirector = item.type === "movie" && (item.director === null || item.director === undefined);
 
   // 3. Repair releaseYear malformed or missing
   const releaseYear = item.releaseYear;
-  const isMalformedYear = !releaseYear || releaseYear === "Unknown" || releaseYear.includes("-") || releaseYear.length !== 4;
+  const isMalformedYear = !releaseYear || releaseYear === "Unknown" || !/^\d{4}$/.test(releaseYear);
 
   return hasHistoricalGenre || missingGenres || missingDirector || isMalformedYear;
 }
@@ -83,31 +83,41 @@ async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", t
   // 1. Cinemeta meta endpoint
   stats.apiCallsCount++;
   try {
-    const response = await fetch(`https://v3-cinemeta.strem.io/meta/${urlType}/${cleanId}.json`);
-    if (response.ok) {
-      const data = await response.json();
-      const meta = data && data.meta;
-      if (meta) {
-        sourceUsed = "cinemeta";
-        if (Array.isArray(meta.genre)) genres = meta.genre;
-        else if (Array.isArray(meta.genres)) genres = meta.genres;
+    let response = await fetch(`https://v3-cinemeta.strem.io/meta/${urlType}/${cleanId}.json`);
+    let data = response.ok ? await response.json() : null;
+    let meta = data && data.meta;
 
-        const directorsList = Array.isArray(meta.director) ? meta.director : (meta.director ? [meta.director] : []);
-        if (directorsList.length > 0) {
-          director = directorsList[0];
-          if (directorsList.length > 1) {
-            directors = directorsList;
-          }
-        }
+    if (!meta) {
+      const fallbackType = urlType === "series" ? "movie" : "series";
+      console.log(`[SYNC] Cinemeta ${urlType} failed for ${cleanId}, trying fallback type ${fallbackType}`);
+      stats.apiCallsCount++;
+      const fallbackResponse = await fetch(`https://v3-cinemeta.strem.io/meta/${fallbackType}/${cleanId}.json`);
+      if (fallbackResponse.ok) {
+        data = await fallbackResponse.json();
+        meta = data && data.meta;
+      }
+    }
 
-        if (Array.isArray(meta.cast)) actors = meta.cast;
-        if (meta.description) plot = meta.description;
-        if (meta.runtime) runtime = meta.runtime;
-        if (meta.imdbRating) imdbRating = meta.imdbRating;
-        if (meta.poster) poster = meta.poster;
-        if (meta.releaseInfo || meta.year || meta.released) {
-          releaseYear = normalizeReleaseYear(meta.releaseInfo || meta.year || meta.released);
+    if (meta) {
+      sourceUsed = "cinemeta";
+      if (Array.isArray(meta.genre)) genres = meta.genre;
+      else if (Array.isArray(meta.genres)) genres = meta.genres;
+
+      const directorsList = Array.isArray(meta.director) ? meta.director : (meta.director ? [meta.director] : []);
+      if (directorsList.length > 0) {
+        director = directorsList[0];
+        if (directorsList.length > 1) {
+          directors = directorsList;
         }
+      }
+
+      if (Array.isArray(meta.cast)) actors = meta.cast;
+      if (meta.description) plot = meta.description;
+      if (meta.runtime) runtime = meta.runtime;
+      if (meta.imdbRating) imdbRating = meta.imdbRating;
+      if (meta.poster) poster = meta.poster;
+      if (meta.releaseInfo || meta.year || meta.released) {
+        releaseYear = normalizeReleaseYear(meta.releaseInfo || meta.year || meta.released);
       }
     }
   } catch (err) {
@@ -388,11 +398,15 @@ export async function runSyncPipeline() {
         const title = getMeta?.name || `Unknown (${imdbId})`;
         try {
           const meta = await fetchEnrichedMetadata(imdbId, type, title, stats);
-          // Save back to cache
-          updatedMetadataCache[cleanId] = {
-            timestamp: Date.now(),
-            meta
-          };
+          // Only cache if the fetched metadata has some actual content (e.g., is not empty/failed)
+          const isFailedFetch = !meta || (meta.genres.length === 1 && meta.genres[0] === "Historical" && !meta.director && meta.releaseYear === "Unknown");
+          if (meta && !isFailedFetch) {
+            // Save back to cache
+            updatedMetadataCache[cleanId] = {
+              timestamp: Date.now(),
+              meta
+            };
+          }
           return { imdbId, meta };
         } catch (err) {
           console.error(`[SYNC] Error fetching metadata for ${imdbId}:`, err);
@@ -463,7 +477,7 @@ export async function runSyncPipeline() {
         if (oldGenres.length === 1 && oldGenres[0] === "Historical" && !(meta.genres.length === 1 && meta.genres[0] === "Historical")) {
           console.log(`[REPAIR]\nHistorical -> ${meta.genres.join(", ")}`);
         }
-        if (oldReleaseYear && oldReleaseYear !== meta.releaseYear && (oldReleaseYear.includes("-") || oldReleaseYear === "Unknown")) {
+        if (oldReleaseYear && oldReleaseYear !== meta.releaseYear && (!/^\d{4}$/.test(oldReleaseYear) || oldReleaseYear === "Unknown")) {
           console.log(`[REPAIR]\n${oldReleaseYear} -> ${meta.releaseYear}`);
         }
         repairedCount++;
@@ -472,6 +486,30 @@ export async function runSyncPipeline() {
       const getMeta = datastoreGetMap.get(imdbId);
       const title = getMeta?.name || existing?.title || (imdbId === "tt0117951" ? "Twelve Monkeys" : `Unknown (${imdbId})`);
       const type = imdbId.includes(":") ? "series" : (getMeta?.type || existing?.type || "movie");
+
+      const duration = getMeta?.state?.duration || existing?.duration || 0;
+      const time_watched = getMeta?.state?.timeWatched || existing?.time_watched || 0;
+      const watch_count = getMeta?.state?.timesWatched || existing?.watch_count || 1;
+      let progress = 0;
+      if (duration > 0) {
+        progress = Math.min(100, Math.round((time_watched / duration) * 100));
+      } else if (getMeta?.state?.watched === "1" || getMeta?.state?.watched === "true" || getMeta?.state?.watched === true) {
+        progress = 100;
+      } else if (existing && existing.progress !== undefined) {
+        progress = existing.progress;
+      }
+
+      let season = existing?.season;
+      let episode = existing?.episode;
+      if (imdbId.includes(":")) {
+        const idParts = imdbId.split(":");
+        if (idParts.length >= 3) {
+          season = Number(idParts[1]);
+          episode = Number(idParts[2]);
+        }
+      }
+      const parent_id = imdbId.includes(":") ? imdbId.split(":")[0] : existing?.parent_id;
+      const episode_title = existing?.episode_title;
 
       const mergedItem = {
         imdbId,
@@ -489,6 +527,14 @@ export async function runSyncPipeline() {
         year: meta.releaseYear !== "Unknown" ? parseInt(meta.releaseYear) : undefined,
         firstWatched,
         lastWatched,
+        progress,
+        watch_count,
+        duration,
+        time_watched,
+        season,
+        episode,
+        parent_id,
+        episode_title,
         source: "stremio",
         repaired: true
       };
