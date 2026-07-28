@@ -37,6 +37,7 @@ async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", t
   const urlType = type === "series" ? "series" : "movie";
 
   let titleVal = "";
+  let resolvedType: "movie" | "series" = type;
   let genres: string[] = [];
   let director: string | null = null;
   let directors: string[] | undefined = undefined;
@@ -104,6 +105,7 @@ async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", t
     if (meta) {
       sourceUsed = "cinemeta";
       if (meta.name) titleVal = meta.name;
+      if (meta.type) resolvedType = meta.type;
       if (Array.isArray(meta.genre)) genres = meta.genre;
       else if (Array.isArray(meta.genres)) genres = meta.genres;
 
@@ -205,6 +207,7 @@ async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", t
 
   return {
     title: titleVal,
+    type: resolvedType,
     genres,
     director,
     directors,
@@ -278,7 +281,8 @@ export async function runSyncPipeline() {
           if (cleanId.includes("libraryItem_")) {
             const parts = cleanId.split("libraryItem_");
             cleanId = parts[parts.length - 1];
-          } else if (cleanId.includes("_")) {
+          }
+          if (cleanId.includes("_")) {
             const parts = cleanId.split("_");
             cleanId = parts[parts.length - 1];
           }
@@ -325,7 +329,8 @@ export async function runSyncPipeline() {
         if (id.includes("libraryItem_")) {
           const parts = id.split("libraryItem_");
           id = parts[parts.length - 1];
-        } else if (id.includes("_")) {
+        }
+        if (id.includes("_")) {
           const parts = id.split("_");
           id = parts[parts.length - 1];
         }
@@ -525,7 +530,7 @@ export async function runSyncPipeline() {
 
       const getMeta = datastoreGetMap.get(imdbId);
       const title = meta.title || getMeta?.name || existing?.title || (imdbId === "tt0117951" ? "Twelve Monkeys" : `Unknown (${imdbId})`);
-      const type = imdbId.includes(":") ? "series" : (getMeta?.type || existing?.type || "movie");
+      const type = imdbId.includes(":") ? "series" : (getMeta?.type || meta?.type || existing?.type || "movie");
 
       const duration = getMeta?.state?.duration || existing?.duration || 0;
       const time_watched = getMeta?.state?.timeWatched || existing?.time_watched || 0;

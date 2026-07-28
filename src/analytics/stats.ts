@@ -233,7 +233,7 @@ export function groupEventsIntoTimeline(events: PlaybackEvent[]): Record<string,
     return normalizeTimestamp(e.finished_at || e.started_at);
   };
 
-  const sorted = [...events].sort((a, b) => getWatchTime(b) - getWatchTime(a));
+  const sorted = [...events].sort((a, b) => getWatchTime(a) - getWatchTime(b));
   const timeline: Record<string, Record<string, PlaybackEvent[]>> = {};
 
   const months = [

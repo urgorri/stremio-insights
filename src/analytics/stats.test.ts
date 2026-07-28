@@ -70,11 +70,11 @@ describe("Analytics & Statistics", () => {
   it("should group events into a proper hierarchical timeline", () => {
     const timeline = groupEventsIntoTimeline(mockEvents);
 
-    // July 2026 should contain Superman and Dune Part Two
+    // July 2026 should contain Superman and Dune Part Two, sorted ascending (oldest first)
     expect(timeline["2026"]).toBeDefined();
     expect(timeline["2026"]["July"]).toBeDefined();
     expect(timeline["2026"]["July"]).toHaveLength(2);
-    expect(timeline["2026"]["July"][0].title).toBe("Superman"); // newest first in month group
+    expect(timeline["2026"]["July"][0].title).toBe("Dune Part Two"); // oldest first in month group
 
     // June 2026 should contain Alien Earth
     expect(timeline["2026"]["June"]).toBeDefined();
