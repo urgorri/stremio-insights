@@ -173,7 +173,15 @@ export const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-full bg-[#0d0e15] text-white font-sans overflow-hidden">
+    <div className="relative flex flex-col h-full bg-[#0d0e15] text-white font-sans overflow-hidden">
+      {syncLoading && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="flex flex-col items-center space-y-3">
+            <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-sm font-semibold text-purple-300">Synchronizing...</span>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-[#12131c]">
         <div className="flex items-center gap-2">
