@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Dashboard } from "../components/Dashboard";
 import { computeAnalytics } from "../analytics/stats";
 import { normalizeReleaseYear } from "../utils/date";
+import { useInsightsStore } from "../hooks/useInsightsStore";
 
 console.log("[SYNC] Content Script loaded.");
 
@@ -661,15 +662,6 @@ if (typeof window !== "undefined") {
   (window as any).runSyncPipeline = runSyncPipeline;
 }
 
-function checkRouteAndSync() {
-  const hash = window.location.hash || "";
-  if (hash === "#/continuewatching" && hash !== lastSyncedHash) {
-    runSyncPipeline().catch(err => {
-      console.error("[SYNC] Sync pipeline failed:", err);
-    });
-  }
-}
-
 // Injects React slidebar/dashboard inside the Stremio container
 function injectInsightsSidebar() {
   if (document.getElementById("stremio-insights-sidebar-wrapper")) return;
@@ -692,7 +684,14 @@ function injectInsightsSidebar() {
 
   toggleBtn.addEventListener("click", (e) => {
     e.stopPropagation();
+    const isOpening = !sidebarWrapper.classList.contains("open");
     sidebarWrapper.classList.toggle("open");
+    if (isOpening) {
+      console.log("[SYNC] Sidebar opened, starting sync pipeline...");
+      useInsightsStore.getState().performSync("").catch((err) => {
+        console.error("[SYNC] Sync pipeline failed on sidebar open:", err);
+      });
+    }
   });
 
   document.addEventListener("click", (e) => {
@@ -708,18 +707,10 @@ function injectInsightsSidebar() {
   });
 }
 
-// Initial route sync and listening to hash transitions
-window.addEventListener("hashchange", checkRouteAndSync);
-
-// Occasional route checker interval just in case Stremio's routing changes dynamically
-setInterval(checkRouteAndSync, 1000);
-
 if (document.readyState === "complete" || document.readyState === "interactive") {
-  checkRouteAndSync();
   injectInsightsSidebar();
 } else {
   document.addEventListener("DOMContentLoaded", () => {
-    checkRouteAndSync();
     injectInsightsSidebar();
   });
 }
