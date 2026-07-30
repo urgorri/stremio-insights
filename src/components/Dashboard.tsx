@@ -405,14 +405,14 @@ export const Dashboard: React.FC = () => {
                 </div>
               ) : (
                 Object.entries(timeline)
-                  .sort(([yearA], [yearB]) => Number(yearA) - Number(yearB))
+                  .sort(([yearA], [yearB]) => Number(yearB) - Number(yearA))
                   .map(([year, monthsObj]) => {
                     const months = [
                       "January", "February", "March", "April", "May", "June",
                       "July", "August", "September", "October", "November", "December"
                     ];
                     const sortedMonths = Object.entries(monthsObj).sort(
-                      ([monthA], [monthB]) => months.indexOf(monthA) - months.indexOf(monthB)
+                      ([monthA], [monthB]) => months.indexOf(monthB) - months.indexOf(monthA)
                     );
                     return (
                       <div key={year} className="space-y-2">
