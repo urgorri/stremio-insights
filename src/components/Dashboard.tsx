@@ -44,30 +44,30 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     fetchData();
 
-    // Auto-sync if running inside extension popup on a web.stremio.com active tab
+    // Auto-sync if running inside extension popup when a Stremio tab is open
     if (isPopup) {
       console.log("[SYNC]\nPopup opened");
       if (typeof chrome !== "undefined" && chrome.tabs) {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-          const activeTab = tabs[0];
-          const url = activeTab?.url || "";
-          if (url.startsWith("https://web.stremio.com")) {
-            console.log("[SYNC]\nActive tab = web.stremio.com");
+        chrome.tabs.query({ url: "https://web.stremio.com/*" }, (tabs) => {
+          if (tabs && tabs.length > 0) {
+            console.log("[SYNC]\nStremio tab is open. Starting on-demand sync...");
             setIsStremioTabActive(true);
-            console.log("[SYNC]\nAuto synchronization started");
-
-            // Auto-trigger sync using stored auth key (auto-extracted by content script)
             if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
               chrome.storage.local.get(["stremio_auth_key"], async (res) => {
                 const key = res.stremio_auth_key || "";
                 try {
                   await performSync(key);
                 } catch (err) {
-                  console.error("[SYNC] Auto sync failed:", err);
+                  console.error("[SYNC] Auto sync failed on popup load:", err);
                 }
+              });
+            } else {
+              performSync("").catch((err) => {
+                console.error("[SYNC] Auto sync failed on popup load:", err);
               });
             }
           } else {
+            console.log("[SYNC]\nNo active Stremio tab found.");
             setIsStremioTabActive(false);
           }
         });
@@ -190,6 +190,33 @@ export const Dashboard: React.FC = () => {
             Stremio Insights
           </h1>
         </div>
+        {(isStremioTabActive || !isPopup) && (
+          <button
+            onClick={async () => {
+              if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+                chrome.storage.local.get(["stremio_auth_key"], async (res) => {
+                  const key = res.stremio_auth_key || "";
+                  try {
+                    await performSync(key);
+                  } catch (err) {
+                    console.error("[SYNC] Manual sync failed:", err);
+                  }
+                });
+              } else {
+                try {
+                  await performSync("");
+                } catch (err) {
+                  console.error("[SYNC] Manual sync failed:", err);
+                }
+              }
+            }}
+            disabled={syncLoading}
+            className="p-1.5 hover:bg-gray-800/60 rounded text-gray-400 hover:text-white transition-all disabled:opacity-50 flex items-center justify-center"
+            title="Synchronize now"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncLoading ? "animate-spin text-purple-400" : ""}`} />
+          </button>
+        )}
       </div>
 
       {/* Tabs Menu */}
