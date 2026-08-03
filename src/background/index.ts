@@ -1,3 +1,5 @@
+import { convertToCSV, convertToJSON } from "../utils/export";
+
 // On install, we initialize state and set standard defaults
 chrome.runtime.onInstalled.addListener(() => {
   console.log("Stremio Insights Service Worker Installed.");
@@ -9,6 +11,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Broadcast synchronization occurred
     chrome.runtime.sendMessage({ type: "DATA_SYNCHRONIZED" }).catch(() => {});
     sendResponse({ success: true });
+  } else if (message.type === "EXPORT_DATA") {
+    chrome.storage.local.get(["library"], (res) => {
+      const library = res.library || [];
+      const format = message.payload?.format;
+      let data = "";
+      try {
+        if (format === "csv") {
+          data = convertToCSV(library);
+        } else {
+          data = convertToJSON(library);
+        }
+        sendResponse({ success: true, data });
+      } catch (err: any) {
+        console.error("[Stremio Insights] Export error:", err);
+        sendResponse({ success: false, error: err.message || "Failed to format export data" });
+      }
+    });
+    return true; // Keep channel open for asynchronous sendResponse
   }
   return true; // Keep channel open
 });
