@@ -419,7 +419,7 @@ export const Dashboard: React.FC = () => {
                         <h2 className="text-sm font-black text-purple-400 border-b border-purple-500/20 pb-0.5 tracking-wider">
                           {year}
                         </h2>
-                        <div className="pl-2 space-y-3">
+                        <div className="space-y-3">
                           {sortedMonths.map(([month, events]) => (
                             <div key={month} className="space-y-1.5">
                               <h3 className="text-xs font-bold text-blue-400/90 tracking-wide uppercase">
