@@ -11,6 +11,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Broadcast synchronization occurred
     chrome.runtime.sendMessage({ type: "DATA_SYNCHRONIZED" }).catch(() => {});
     sendResponse({ success: true });
+    return false; // Synchronous response, do not return true
   } else if (message.type === "EXPORT_DATA") {
     chrome.storage.local.get(["library"], (res) => {
       const library = res.library || [];
@@ -30,5 +31,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true; // Keep channel open for asynchronous sendResponse
   }
-  return true; // Keep channel open
+  // For unhandled messages, do not return true to prevent keeping connection ports open indefinitely
+  return false;
 });
