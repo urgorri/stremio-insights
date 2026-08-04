@@ -44,27 +44,34 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     fetchData();
 
-    // Auto-sync if running inside extension popup when a Stremio tab is open
+    // Auto-sync if running inside extension popup when a Stremio tab is open and active
     if (isPopup) {
       console.log("[SYNC]\nPopup opened");
       if (typeof chrome !== "undefined" && chrome.tabs) {
         chrome.tabs.query({ url: "https://web.stremio.com/*" }, (tabs) => {
           if (tabs && tabs.length > 0) {
-            console.log("[SYNC]\nStremio tab is open. Starting on-demand sync...");
             setIsStremioTabActive(true);
-            if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
-              chrome.storage.local.get(["stremio_auth_key"], async (res) => {
-                const key = res.stremio_auth_key || "";
-                try {
-                  await performSync(key);
-                } catch (err: any) {
+
+            // Only auto-sync on load if there is an active (focused) Stremio tab
+            const hasActiveTab = tabs.some(tab => tab.active);
+            if (hasActiveTab) {
+              console.log("[SYNC]\nActive Stremio tab is open. Starting on-demand sync...");
+              if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+                chrome.storage.local.get(["stremio_auth_key"], async (res) => {
+                  const key = res.stremio_auth_key || "";
+                  try {
+                    await performSync(key);
+                  } catch (err: any) {
+                    console.warn("[SYNC] Auto sync on popup load skipped or deferred:", err.message || err);
+                  }
+                });
+              } else {
+                performSync("").catch((err: any) => {
                   console.warn("[SYNC] Auto sync on popup load skipped or deferred:", err.message || err);
-                }
-              });
+                });
+              }
             } else {
-              performSync("").catch((err: any) => {
-                console.warn("[SYNC] Auto sync on popup load skipped or deferred:", err.message || err);
-              });
+              console.log("[SYNC]\nStremio tab is in the background. Skipping auto-sync on load to prevent communication failures.");
             }
           } else {
             console.log("[SYNC]\nNo active Stremio tab found.");

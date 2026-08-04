@@ -152,6 +152,14 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
             };
 
             try {
+              // If target tab is not active, activate it first so it is focused and can sync reliably
+              if (!targetTab.active) {
+                console.log(`[SYNC] Activating Stremio tab ${tabId} for sync...`);
+                await new Promise<void>((resolveUpdate) => {
+                  chrome.tabs.update(tabId, { active: true }, () => resolveUpdate());
+                });
+              }
+
               // If tab is discarded, reload it first to wake it up
               if (targetTab.discarded) {
                 console.log(`[SYNC] Stremio tab ${tabId} is discarded. Waking it up/reloading...`);
