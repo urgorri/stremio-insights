@@ -85,23 +85,97 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
         return;
       }
 
-      chrome.tabs.query({ url: "https://web.stremio.com/*" }, (stremioTabs) => {
+      chrome.tabs.query({ url: "https://web.stremio.com/*" }, async (stremioTabs) => {
         if (stremioTabs && stremioTabs.length > 0) {
-          const targetTab = stremioTabs.find(tab => tab.active) || stremioTabs[0];
+          // Prioritize active and non-discarded tabs
+          const targetTab = stremioTabs.find(tab => tab.active && !tab.discarded) ||
+                            stremioTabs.find(tab => !tab.discarded) ||
+                            stremioTabs.find(tab => tab.active) ||
+                            stremioTabs[0];
+
           if (targetTab.id) {
-            chrome.tabs.sendMessage(targetTab.id, { type: "FORCE_RESCAN" }, async (response) => {
+            const tabId = targetTab.id;
+
+            // Helper to wait for the tab to complete loading (5s timeout)
+            const waitForTabComplete = (tId: number): Promise<void> => {
+              return new Promise<void>((res) => {
+                let resolved = false;
+                const done = () => {
+                  if (!resolved) {
+                    resolved = true;
+                    chrome.tabs.onUpdated.removeListener(listener);
+                    clearTimeout(timeout);
+                    res();
+                  }
+                };
+                const timeout = setTimeout(done, 5000);
+                const listener = (updatedTabId: number, changeInfo: any) => {
+                  if (updatedTabId === tId && changeInfo.status === "complete") {
+                    done();
+                  }
+                };
+                chrome.tabs.get(tId, (tab) => {
+                  const err = chrome.runtime.lastError;
+                  if (err || !tab) {
+                    done();
+                    return;
+                  }
+                  if (tab.status === "complete") {
+                    done();
+                    return;
+                  }
+                  chrome.tabs.onUpdated.addListener(listener);
+                });
+              });
+            };
+
+            // Helper to send message with up to 3 retries (500ms delay)
+            const sendMessageWithRetry = (tId: number, msg: any, retries = 3, delay = 500): Promise<any> => {
+              return new Promise((res, rej) => {
+                const attempt = (remaining: number) => {
+                  chrome.tabs.sendMessage(tId, msg, (response) => {
+                    const err = chrome.runtime.lastError;
+                    if (err) {
+                      if (remaining > 0) {
+                        console.log(`[SYNC] Send message to tab ${tId} failed: ${err.message}. Retrying in ${delay}ms... (${remaining} retries left)`);
+                        setTimeout(() => attempt(remaining - 1), delay);
+                      } else {
+                        rej(new Error(err.message || "Communication failed"));
+                      }
+                    } else {
+                      res(response);
+                    }
+                  });
+                };
+                attempt(retries);
+              });
+            };
+
+            try {
+              // If tab is discarded, reload it first to wake it up
+              if (targetTab.discarded) {
+                console.log(`[SYNC] Stremio tab ${tabId} is discarded. Waking it up/reloading...`);
+                chrome.tabs.reload(tabId);
+                await waitForTabComplete(tabId);
+              } else if (targetTab.status === "loading") {
+                console.log(`[SYNC] Stremio tab ${tabId} is currently loading. Waiting for it to complete...`);
+                await waitForTabComplete(tabId);
+              }
+
+              // Send the FORCE_RESCAN message with retry policy
+              const response = await sendMessageWithRetry(tabId, { type: "FORCE_RESCAN" });
               set({ syncLoading: false });
-              if (chrome.runtime.lastError) {
-                set({ syncError: "Could not communicate with Stremio tab." });
-                reject(new Error("Communication failed"));
-              } else if (response && response.success) {
+              if (response && response.success) {
                 await get().fetchData();
                 resolve(1);
               } else {
                 set({ syncError: "Sync did not return success status." });
                 reject(new Error("Sync failed"));
               }
-            });
+            } catch (err: any) {
+              set({ syncLoading: false, syncError: err.message || "Could not communicate with Stremio tab." });
+              reject(new Error("Communication failed"));
+            }
           } else {
             set({ syncLoading: false, syncError: "Stremio tab could not be identified." });
             reject(new Error("Stremio tab could not be identified."));

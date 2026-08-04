@@ -57,13 +57,13 @@ export const Dashboard: React.FC = () => {
                 const key = res.stremio_auth_key || "";
                 try {
                   await performSync(key);
-                } catch (err) {
-                  console.error("[SYNC] Auto sync failed on popup load:", err);
+                } catch (err: any) {
+                  console.warn("[SYNC] Auto sync on popup load skipped or deferred:", err.message || err);
                 }
               });
             } else {
-              performSync("").catch((err) => {
-                console.error("[SYNC] Auto sync failed on popup load:", err);
+              performSync("").catch((err: any) => {
+                console.warn("[SYNC] Auto sync on popup load skipped or deferred:", err.message || err);
               });
             }
           } else {
