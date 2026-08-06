@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy - Stremio Insights</title>
+
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="Official Privacy Policy for Stremio Insights. Read how your Stremio viewing history, analytics, and metadata are processed entirely locally on your device with 100% privacy.">
+  <meta name="robots" content="index, follow">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Privacy Policy - Stremio Insights">
+  <meta property="og:description" content="Understand how Stremio Insights processes your viewing history entirely locally on your machine. Privacy-first, open-source, and transparent.">
+  <meta property="og:image" content="favicon.png">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Privacy Policy - Stremio Insights">
+  <meta name="twitter:description" content="Understand how Stremio Insights processes your viewing history entirely locally on your machine. Privacy-first, open-source, and transparent.">
+
+  <!-- Favicon link -->
+  <link rel="icon" type="image/png" href="favicon.png">
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="navbar">
+    <div class="container navbar-container">
+      <div class="brand">
+        <!-- Inline SVG Logo (Trending Up / Insights representation) -->
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="brand-logo" aria-hidden="true">
+          <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+          <polyline points="16 7 22 7 22 13"></polyline>
+        </svg>
+        <span class="brand-title">Stremio Insights</span>
+      </div>
+      <!--<div class="nav-links">
+        <a href="https://github.com/user/stremio-insights" class="nav-btn" target="_blank" rel="noopener">GitHub Project</a>
+      </div>-->
+    </div>
+  </header>
+
+  <!-- Hero / Introduction -->
+  <section class="hero">
+    <div class="container">
+      <p class="hero-tag">Chrome Web Store Compliance Document</p>
+      <h1 class="hero-title">Privacy Policy</h1>
+      <p class="hero-subtitle">Your data belongs to you. Stremio Insights processes and stores your viewing history entirely locally, keeping your privacy secure.</p>
+      <div class="meta-info">
+        <span class="meta-item"><strong>Last Updated:</strong> February 18, 2025</span>
+        <span class="meta-item"><strong>Classification:</strong> Public / Local Only</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main Content Layout -->
+  <main class="container main-layout">
+
+    <!-- Table of Contents Sidebar -->
+    <aside class="toc-sidebar" aria-label="Table of Contents">
+      <div class="toc-sticky">
+        <h2 class="toc-header">On This Page</h2>
+        <nav>
+          <ul class="toc-list">
+            <li><a href="#introduction">1. Introduction</a></li>
+            <li><a href="#what-it-does">2. What the Extension Does</a></li>
+            <li><a href="#data-we-process">3. What Data Is Processed</a></li>
+            <li><a href="#what-we-dont-collect">4. What Data Is NOT Collected</a></li>
+            <li><a href="#how-history-is-processed">5. How Viewing History Is Processed</a></li>
+            <li><a href="#local-storage-and-databases">6. Storage, IndexedDB & chrome.storage</a></li>
+            <li><a href="#data-residency">7. Does My Data Leave the Device?</a></li>
+            <li><a href="#external-services">8. External Services and APIs</a></li>
+            <li><a href="#optional-integrations">9. Optional Integrations</a></li>
+            <li><a href="#data-retention">10. Data Retention</a></li>
+            <li><a href="#user-controls">11. User Controls (Export & Delete)</a></li>
+            <li><a href="#security">12. Security Practices</a></li>
+            <li><a href="#extension-permissions">13. Chrome Extension Permission Usage</a></li>
+            <li><a href="#changes">14. Changes to This Policy</a></li>
+            <li><a href="#contact">15. Contact Information</a></li>
+          </ul>
+        </nav>
+      </div>
+    </aside>
+
+    <!-- Policy Text Content -->
+    <article class="content-body">
+
+      <section id="introduction">
+        <h2>1. Introduction</h2>
+        <p>
+          At <strong>Stremio Insights</strong>, we believe that your digital footprints and viewing history are deeply personal. We are committed to transparency, security, and developer integrity. This Privacy Policy outlines exactly how our browser extension interacts with your data, what information is accessed, and how it is securely stored.
+        </p>
+        <p>
+          Unlike modern SaaS tools or tracking scripts, Stremio Insights is a <strong>privacy-first, local-only Chrome Extension</strong>. It contains no tracking scripts, no advertisements, and no analytics cookies.
+        </p>
+      </section>
+
+      <section id="what-it-does">
+        <h2>2. What the Extension Does</h2>
+        <p>
+          Stremio Insights is designed to enhance your experience on <a href="https://web.stremio.com" target="_blank" rel="noopener">web.stremio.com</a>. Stremio's default cloud dashboard provides a simple "Continue Watching" carousel but does not maintain a complete, searchable, chronological timeline or long-term analytical metrics.
+        </p>
+        <p>
+          Stremio Insights fills this gap by reading your library updates from Stremio, calculating aggregate viewing metrics (such as total hours watched, favorite genres, top directors, and yearly breakdown charts), and presenting this information in a neat, responsive sidebar and dashboard directly integrated into the Stremio interface.
+        </p>
+      </section>
+
+      <section id="data-we-process">
+        <h2>3. What Data Is Processed</h2>
+        <p>
+          To compute your dashboards and construct your chronological timeline, Stremio Insights accesses and processes the following data:
+        </p>
+        <ul>
+          <li>
+            <strong>Stremio Authentication Token (authKey):</strong> Extracted strictly from Stremio's native <code>localStorage</code> profile object to authenticate local HTTP requests to Stremio's authorized endpoints (such as retrieving library items and sync states).
+          </li>
+          <li>
+            <strong>Viewing Library Data:</strong> List of library items, watched counts, playback progress, video runtimes, and watch timestamps fetched from Stremio's official developer API.
+          </li>
+          <li>
+            <strong>Content Identifiers:</strong> Unique IMDb IDs (e.g., <code>tt0117951</code>) detected from the page URL or rendered on-screen media cards to determine which movie or television show is currently being viewed or displayed.
+          </li>
+          <li>
+            <strong>Rich Media Metadata:</strong> Non-personally identifiable metadata including titles, genres, actors, directors, descriptions, release years, and poster images retrieved to display your charts and lists.
+          </li>
+        </ul>
+      </section>
+
+      <section id="what-we-dont-collect">
+        <h2>4. What Data Is NOT Collected</h2>
+        <p>
+          We follow a strict <strong>data minimization principle</strong>. We do not collect, read, store, or transmit:
+        </p>
+        <ul>
+          <li>
+            <strong>Personal Identifiable Information (PII):</strong> We do not collect your name, email address, physical location, IP address, password, or Stremio account login credentials. While your email is stored natively in Stremio's own profile storage, the extension completely ignores it and only extracts the authorization token.
+          </li>
+          <li>
+            <strong>Broad Browsing History:</strong> The extension is strictly sandboxed. It is technologically blocked from viewing, reading, or interacting with your history, sessions, or tabs on any website other than <code>web.stremio.com</code>.
+          </li>
+          <li>
+            <strong>Session Cookies & Device Fingerprints:</strong> We do not drop tracking cookies, utilize unique browser canvas fingerprinting, or generate device trackers.
+          </li>
+        </ul>
+      </section>
+
+      <section id="how-history-is-processed">
+        <h2>5. How Viewing History Is Processed</h2>
+        <p>
+          Stremio Insights employs a dual-channel pipeline to process your viewing history:
+        </p>
+        <ol>
+          <li>
+            <strong>Authoritative Sync Pipeline:</strong> When you open the extension sidebar or dashboard, Stremio Insights pulls the latest watch records directly from Stremio's cloud database (<code>datastoreMeta</code> and <code>datastoreGet</code> endpoints). It merges these records with your local history database, automatically repairing corrupted dates or missing metadata.
+          </li>
+          <li>
+            <strong>Real-time Playback Interception:</strong> The extension content script injects a lightweight hook into the main page window. This hook intercepts Stremio's outgoing <code>datastorePut</code> network requests (dispatched when Stremio updates your playback progress). When intercepted, the playback progress, timestamps, and duration are processed immediately to keep your local analytics dashboard up-to-date in real-time.
+          </li>
+        </ol>
+      </section>
+
+      <section id="local-storage-and-databases">
+        <h2>6. Storage, IndexedDB & chrome.storage</h2>
+        <p>
+          We store data securely using official browser database standards:
+        </p>
+        <ul>
+          <li>
+            <strong>Stremio localStorage:</strong> We read Stremio’s <code>localStorage.getItem('profile')</code> strictly to fetch your profile's <code>authKey</code>. We do not edit, delete, or write back any data into Stremio's <code>localStorage</code> or Stremio's native <code>IndexedDB</code> databases (such as <code>stremio-core</code>).
+          </li>
+          <li>
+            <strong>chrome.storage.local (Primary Database):</strong> All processed watch history records, metadata caches, user-configured settings, and computed statistics (e.g. favorite directors, monthly activity counts, heatmap tallies) are stored exclusively inside your browser's secure <code>chrome.storage.local</code> database. This database is sandboxed by Chrome for Stremio Insights and cannot be read by other websites or other extensions.
+          </li>
+        </ul>
+      </section>
+
+      <section id="data-residency">
+        <h2>7. Does My Data Leave the Device?</h2>
+        <p class="highlight-box">
+          <strong>No. Your data never leaves your device.</strong>
+        </p>
+        <p>
+          All calculations, statistics aggregation, graph generation, timeline formatting, and searches are performed entirely in your browser using local JavaScript. We do not run any backends, analytical collectors, or proxy servers. There is no cloud storage, meaning we could not inspect your viewing history even if we wanted to.
+        </p>
+      </section>
+
+      <section id="external-services">
+        <h2>8. External Services and APIs</h2>
+        <p>
+          To display posters, genres, and directors in your dashboard, the extension communicates directly from your browser to external official databases:
+        </p>
+        <ul>
+          <li>
+            <strong>Stremio Datastore API (<code>api.strem.io</code>):</strong> Authenticated queries are made securely via HTTPS using your local token to fetch your profile's saved library item list and metadata states.
+          </li>
+          <li>
+            <strong>Stremio Cinemeta API (<code>v3-cinemeta.strem.io</code> & <code>cinemeta-catalogs.strem.io</code>):</strong> Unauthenticated queries are made to these public catalog services to retrieve media details (runtimes, casting, descriptions, posters, and release years) based on standard IMDb IDs.
+          </li>
+        </ul>
+        <p>
+          These external endpoints are contacted directly from your browser. They only receive the media ID (like IMDb ID) and have no access to your personal identifier, Stremio Insights profile, or extension-computed history.
+        </p>
+      </section>
+
+      <section id="optional-integrations">
+        <h2>9. Optional Integrations</h2>
+        <p>
+          Stremio Insights includes an optional <strong>OMDb API (Open Movie Database)</strong> integration. If Stremio's default metadata provider fails to return details for a specific item, the extension can fallback to OMDb.
+        </p>
+        <p>
+          This integration is entirely optional and remains inactive unless you input your own personal OMDb API Key in the extension options. Your OMDb API key is saved strictly in your local <code>chrome.storage.local</code> cache.
+        </p>
+      </section>
+
+      <section id="data-retention">
+        <h2>10. Data Retention</h2>
+        <p>
+          Since your data is stored locally in your browser's sandboxed storage, it is retained until:
+        </p>
+        <ol>
+          <li>
+            You explicitly delete your data using the extension's user controls.
+          </li>
+          <li>
+            You uninstall the Stremio Insights extension from Google Chrome.
+          </li>
+          <li>
+            Google Chrome is reset, or its browser storage cache is manually wiped.
+          </li>
+        </ol>
+      </section>
+
+      <section id="user-controls">
+        <h2>11. User Controls (Export & Delete)</h2>
+        <p>
+          We give you absolute control and digital sovereignty over your viewing history:
+        </p>
+        <ul>
+          <li>
+            <strong>Export Backup (CSV/JSON):</strong> You can export your entire local database at any time. Simply open the Dashboard, click the Export buttons in the header, and select either <strong>CSV format</strong> (for spreadsheet software) or <strong>JSON format</strong> (for developer diagnostics or offline backups).
+          </li>
+          <li>
+            <strong>Wipe History (Delete):</strong> You can instantly and permanently purge all stored history from the extension. Clicking the "Clear History" button in the settings panel instructs <code>chrome.storage.local</code> to wipe all <code>library</code>, <code>analytics</code>, and <code>lastSync</code> data. This action is irreversible.
+          </li>
+        </ul>
+      </section>
+
+      <section id="security">
+        <h2>12. Security Practices</h2>
+        <p>
+          Our development practices prioritize absolute security:
+        </p>
+        <ul>
+          <li>
+            <strong>Secure Content Communication:</strong> The Stremio auth token is extracted securely in the main browser context and bridged to the isolated content script via strict custom window events (<code>REQUEST_STREMIO_PROFILE</code> and <code>STREMIO_PROFILE_EXTRACTED</code>) to avoid DOM sniffing and security vulnerabilities.
+          </li>
+          <li>
+            <strong>Sandboxed execution:</strong> All analytics rendering, script execution, and layout logic run within Chrome’s strict Extension sandbox, preventing external pages from accessing the extension state.
+          </li>
+          <li>
+            <strong>HTTPS Enforcement:</strong> All network queries to Stremio and Cinemeta endpoints are forced over encrypted Transport Layer Security (HTTPS).
+          </li>
+        </ul>
+      </section>
+
+      <section id="extension-permissions">
+        <h2>13. Chrome Extension Permission Usage</h2>
+        <p>
+          To comply with Google Chrome Web Store policies, here is a complete explanation of the permissions declared in our extension manifest:
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Permission Name</th>
+              <th>Technical Scope</th>
+              <th>Justification / Why It is Required</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>storage</code></td>
+              <td>Accesses browser storage APIs.</td>
+              <td>Required to save your chronological watch records, enriched genres, caching directories, and options locally in <code>chrome.storage.local</code>.</td>
+            </tr>
+            <tr>
+              <td><code>activeTab</code></td>
+              <td>Accesses current active tab.</td>
+              <td>Enables the extension popup to send a rescan command (<code>FORCE_RESCAN</code>) to your current active Stremio window when you click the manual sync button.</td>
+            </tr>
+            <tr>
+              <td>Host Permission: <br><code>https://web.stremio.com/*</code></td>
+              <td>Enables content script injection.</td>
+              <td>Allows the extension to inject its content scripts (to intercept playback updates via fetch and render the integrated slide-out statistics panel inside Stremio's web container).</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="changes">
+        <h2>14. Changes to This Policy</h2>
+        <p>
+          We may update our Privacy Policy from time to time. Any changes will be posted directly to this page, and the "Last Updated" date at the top of the policy will be updated accordingly. Because the extension has no network channels to send you notifications, we encourage you to review this page periodically to remain informed about how we safeguard your data.
+        </p>
+      </section>
+
+      <section id="contact">
+        <h2>15. Contact Information</h2>
+        <p>
+          Stremio Insights is a fully open-source project. If you have any questions, concerns, or bug reports regarding this Privacy Policy or our code implementation, you are welcome to reach out:
+        </p>
+        <ul>
+          <li>
+            <strong>GitHub Issue Tracker:</strong> Submit a query on our official open-source repository at <a href="https://github.com/user/stremio-insights/issues" target="_blank" rel="noopener">github.com/user/stremio-insights/issues</a>.
+          </li>
+          <li>
+            <strong>Developer Contact Email:</strong> privacy@stremio-insights.local (Placeholder for store publication)
+          </li>
+        </ul>
+      </section>
+
+    </article>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container footer-container">
+      <p>&copy; 2025 Stremio Insights. Released under the MIT License.</p>
+      <p class="footer-disclaimer">This extension is an independent open-source contribution and is not affiliated with, endorsed by, or maintained by Stremio.</p>
+    </div>
+  </footer>
+
+</body>
+</html>
