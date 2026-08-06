@@ -715,8 +715,12 @@ if (document.readyState === "complete" || document.readyState === "interactive")
   });
 }
 
-// Listen for rescan triggers
+// Listen for rescan and handshake triggers
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "PING") {
+    sendResponse({ type: "CONTENT_SCRIPT_READY" });
+    return false;
+  }
   if (message.type === "FORCE_RESCAN") {
     // Force rescan ignores the hash-matching cache to allow user-triggered manual refreshes
     lastSyncedHash = "";
@@ -724,11 +728,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .then(() => {
         sendResponse({ success: true, count: 1 });
       })
-      .catch((err) => {
+      .catch((err: any) => {
         console.error("[SYNC] Manual rescan failed:", err);
         sendResponse({ success: false, error: err.message });
       });
     return true;
   }
-  return;
+  return false;
 });
+
+// Notify the background service worker that content script is fully loaded
+try {
+  if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage) {
+    chrome.runtime.sendMessage({ type: "CONTENT_SCRIPT_LOADED" }).catch(() => {});
+  }
+} catch (e) {
+  console.warn("[SYNC] Failed to notify background on load:", e);
+}
