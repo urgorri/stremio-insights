@@ -5,7 +5,7 @@ export default defineManifest(async (env) => ({
   name: "Stremio Insights",
   version: "1.0.0",
   description: "Complete watch history, analytics, search, and badges for web.stremio.com.",
-  permissions: ["storage", "activeTab"],
+  permissions: ["storage", "activeTab", "scripting"],
   host_permissions: ["https://web.stremio.com/*"],
   icons: {
     "16": "icons/icon16.png",
