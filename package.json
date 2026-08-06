@@ -1,6 +1,6 @@
 {
   "name": "stremio-insights",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Chrome Extension for web.stremio.com watch history and analytics",
   "type": "module",
   "scripts": {
