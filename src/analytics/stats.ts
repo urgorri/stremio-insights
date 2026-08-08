@@ -48,11 +48,10 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
     return normalizeTimestamp(e.started_at);
   };
 
-  // Sort by first watch time to find firstRecorded
-  const sortedByFirst = library
-    .slice()
-    .sort((a, b) => getFirstWatchTime(a) - getFirstWatchTime(b));
-  stats.firstRecorded = sortedByFirst[0] || null;
+  // Find firstRecorded by finding the minimum first watch time
+  stats.firstRecorded = library.length > 0
+    ? library.reduce((min, curr) => getFirstWatchTime(curr) < getFirstWatchTime(min) ? curr : min)
+    : null;
 
   // Sort by watch time to find lastWatched
   const sortedByLast = library
