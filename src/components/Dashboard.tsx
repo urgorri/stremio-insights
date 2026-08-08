@@ -137,7 +137,7 @@ export const Dashboard: React.FC = () => {
   // Generate lists of unique genres and years for dropdown selection
   const uniqueGenres = Array.from(
     new Set(
-      getFilteredEvents()
+      filteredEvents
         .flatMap((e) => e.genres || [])
         .filter(Boolean)
     )
@@ -145,7 +145,7 @@ export const Dashboard: React.FC = () => {
 
   const uniqueYears = Array.from(
     new Set(
-      getFilteredEvents()
+      filteredEvents
         .map((e) => normalizeReleaseYear(e.releaseYear || e.year))
     )
   ).sort((a, b) => {
