@@ -668,10 +668,33 @@ function injectInsightsSidebar() {
 
   const toggleBtn = document.createElement("button");
   toggleBtn.id = "stremio-insights-toggle-btn";
-  toggleBtn.innerHTML = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trending-up"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
-    <span>Insights</span>
-  `;
+
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svgEl = document.createElementNS(svgNS, "svg");
+  svgEl.setAttribute("width", "14");
+  svgEl.setAttribute("height", "14");
+  svgEl.setAttribute("viewBox", "0 0 24 24");
+  svgEl.setAttribute("fill", "none");
+  svgEl.setAttribute("stroke", "currentColor");
+  svgEl.setAttribute("stroke-width", "2.5");
+  svgEl.setAttribute("stroke-linecap", "round");
+  svgEl.setAttribute("stroke-linejoin", "round");
+  svgEl.setAttribute("class", "lucide lucide-trending-up");
+
+  const polyline1 = document.createElementNS(svgNS, "polyline");
+  polyline1.setAttribute("points", "22 7 13.5 15.5 8.5 10.5 2 17");
+  svgEl.appendChild(polyline1);
+
+  const polyline2 = document.createElementNS(svgNS, "polyline");
+  polyline2.setAttribute("points", "16 7 22 7 22 13");
+  svgEl.appendChild(polyline2);
+
+  const spanEl = document.createElement("span");
+  spanEl.textContent = "Insights";
+
+  toggleBtn.appendChild(svgEl);
+  toggleBtn.appendChild(spanEl);
+
   document.body.appendChild(toggleBtn);
 
   const sidebarWrapper = document.createElement("div");
