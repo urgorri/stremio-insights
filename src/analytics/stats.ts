@@ -59,10 +59,10 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
     : null;
 
   // Sort by watch time to find lastWatched
-  const sortedByLast = library
+  const sortedDescending = library
     .slice()
-    .sort((a, b) => getWatchTime(a) - getWatchTime(b));
-  stats.lastWatched = sortedByLast[sortedByLast.length - 1] || null;
+    .sort((a, b) => getWatchTime(b) - getWatchTime(a));
+  stats.lastWatched = sortedDescending[0] || null;
 
   // Most watched year
   const libraryYearCounts: Record<number, number> = {};
@@ -113,9 +113,7 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
 
   // Timeline (using watch time)
   const timeline: Record<string, PlaybackEvent[]> = {};
-  library
-    .slice()
-    .sort((a, b) => getWatchTime(b) - getWatchTime(a))
+  sortedDescending
     .forEach(item => {
       const ts = getWatchTime(item);
       if (ts) {
@@ -131,7 +129,7 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
     });
 
   // Recently watched
-  const recentlyWatched = sortedByLast.slice().reverse().slice(0, 10);
+  const recentlyWatched = sortedDescending.slice(0, 10);
 
   // Average IMDb rating
   const ratedItems = library.filter(item => item.imdbRating && !isNaN(parseFloat(item.imdbRating)));
