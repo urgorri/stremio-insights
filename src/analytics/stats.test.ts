@@ -82,7 +82,110 @@ describe("Analytics & Statistics", () => {
     expect(timeline["2026"]["June"][0].title).toBe("Alien Earth");
   });
 
-  it("should calculate heatmap for the current year only, mapping months horizontally and days vertically", () => {
+  describe("groupEventsIntoTimeline", () => {
+    it("should return an empty object for an empty array", () => {
+    expect(groupEventsIntoTimeline([])).toEqual({});
+  });
+
+  it("should skip events without a valid timestamp", () => {
+    const invalidEvents: PlaybackEvent[] = [
+      {
+        imdb_id: "tt1",
+        title: "No Timestamp",
+        type: "movie",
+        // No started_at, finished_at, or lastWatched
+      } as PlaybackEvent,
+      {
+        imdb_id: "tt2",
+        title: "Invalid Timestamp String",
+        type: "movie",
+        started_at: "not-a-date",
+      } as PlaybackEvent
+    ];
+
+    expect(groupEventsIntoTimeline(invalidEvents)).toEqual({});
+  });
+
+  it("should prioritize lastWatched over finished_at over started_at", () => {
+    const events: PlaybackEvent[] = [
+      {
+        imdb_id: "tt1",
+        title: "Priority Test",
+        type: "movie",
+        started_at: "2023-01-01T12:00:00.000Z", // January
+        finished_at: "2023-02-01T12:00:00.000Z", // February
+        lastWatched: "2023-03-01T12:00:00.000Z", // March (Should win)
+      } as PlaybackEvent,
+      {
+        imdb_id: "tt2",
+        title: "Priority Test 2",
+        type: "movie",
+        started_at: "2024-01-01T12:00:00.000Z", // January
+        finished_at: "2024-02-01T12:00:00.000Z", // February (Should win)
+      } as PlaybackEvent
+    ];
+
+    const timeline = groupEventsIntoTimeline(events);
+    expect(timeline["2023"]).toBeDefined();
+    expect(timeline["2023"]["March"]).toBeDefined();
+    expect(timeline["2023"]["March"][0].title).toBe("Priority Test");
+
+    expect(timeline["2024"]).toBeDefined();
+    expect(timeline["2024"]["February"]).toBeDefined();
+    expect(timeline["2024"]["February"][0].title).toBe("Priority Test 2");
+  });
+
+  it("should properly group events crossing multiple years and months", () => {
+    const events: PlaybackEvent[] = [
+      {
+        imdb_id: "tt1",
+        title: "Dec 2023",
+        type: "movie",
+        started_at: "2023-12-15T12:00:00.000Z",
+      } as PlaybackEvent,
+      {
+        imdb_id: "tt2",
+        title: "Jan 2024",
+        type: "movie",
+        started_at: "2024-01-15T12:00:00.000Z",
+      } as PlaybackEvent,
+      {
+        imdb_id: "tt3",
+        title: "Jan 2024 (2)",
+        type: "movie",
+        started_at: "2024-01-20T12:00:00.000Z",
+      } as PlaybackEvent,
+      {
+        imdb_id: "tt4",
+        title: "Feb 2024",
+        type: "movie",
+        started_at: "2024-02-15T12:00:00.000Z",
+      } as PlaybackEvent
+    ];
+
+    const timeline = groupEventsIntoTimeline(events);
+
+    // Should contain both years
+    expect(Object.keys(timeline)).toEqual(expect.arrayContaining(["2023", "2024"]));
+
+    // Check 2023
+    expect(timeline["2023"]["December"]).toBeDefined();
+    expect(timeline["2023"]["December"]).toHaveLength(1);
+
+    // Check 2024
+    expect(timeline["2024"]["January"]).toBeDefined();
+    expect(timeline["2024"]["January"]).toHaveLength(2);
+    // Sort order: descending time
+    expect(timeline["2024"]["January"][0].title).toBe("Jan 2024 (2)");
+    expect(timeline["2024"]["January"][1].title).toBe("Jan 2024");
+
+    expect(timeline["2024"]["February"]).toBeDefined();
+    expect(timeline["2024"]["February"]).toHaveLength(1);
+    });
+  });
+
+  describe("Heatmap tests", () => {
+    it("should calculate heatmap for the current year only, mapping months horizontally and days vertically", () => {
     const currentYear = new Date().getFullYear();
 
     // Let's create an event on Jan 5th of current year.
@@ -125,7 +228,8 @@ describe("Analytics & Statistics", () => {
     // All other cells should be 0
     const otherCells = summary.heatmap.filter(item => !(item.month === 1 && item.day === 5));
     otherCells.forEach(cell => {
-      expect(cell.count).toBe(0);
+        expect(cell.count).toBe(0);
+      });
     });
   });
 });
