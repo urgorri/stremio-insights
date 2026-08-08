@@ -35,59 +35,22 @@ function needsRepair(item: any, correctType?: string): boolean {
   return hasHistoricalGenre || missingGenres || missingDirector || isMalformedYear;
 }
 
-async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", title: string, stats: SyncStats): Promise<any> {
-  const cleanId = imdbId.split(":")[0];
-  const urlType = type === "series" ? "series" : "movie";
+interface MetadataContext {
+  titleVal: string;
+  resolvedType: "movie" | "series";
+  genres: string[];
+  director: string | null;
+  directors: string[] | undefined;
+  actors: string[];
+  runtime: string;
+  plot: string;
+  imdbRating: string;
+  poster: string;
+  releaseYear: string;
+  sourceUsed: "cinemeta" | "omdb" | "none";
+}
 
-  let titleVal = "";
-  let resolvedType: "movie" | "series" = type;
-  let genres: string[] = [];
-  let director: string | null = null;
-  let directors: string[] | undefined = undefined;
-  let actors: string[] = [];
-  let runtime = "Unknown";
-  let plot = "";
-  let imdbRating = "";
-  let poster = "";
-  let releaseYear = "Unknown";
-  let sourceUsed: "cinemeta" | "omdb" | "none" = "cinemeta";
-
-  // Custom hardcoded override for tt0117951 Twelve Monkeys as requested by prompt
-  if (cleanId === "tt0117951") {
-    titleVal = "Twelve Monkeys";
-    genres = ["Sci-Fi", "Mystery", "Thriller"];
-    director = "Terry Gilliam";
-    actors = ["Bruce Willis", "Madeleine Stowe", "Brad Pitt"];
-    plot = "In a future world devastated by disease, a convict is sent back in time to gather information about the man-made virus that wiped out most of the human population.";
-    runtime = "129 min";
-    imdbRating = "8.0";
-    poster = "https://images.metahub.space/poster/small/tt0114746/img";
-    releaseYear = "1995";
-
-    stats.cinemetaEnrichedCount++;
-
-    // Exact log format requested:
-    // [METADATA]
-    // tt0117951
-    // genres=["Sci-Fi","Thriller"]
-    // director="Terry Gilliam"
-    console.log(`[METADATA]\n${cleanId}\ngenres=${JSON.stringify(["Sci-Fi", "Thriller"])}\ndirector=${JSON.stringify(director)}`);
-
-    return {
-      title: titleVal,
-      genres,
-      director,
-      directors,
-      actors,
-      runtime,
-      plot,
-      imdbRating,
-      poster,
-      releaseYear
-    };
-  }
-
-  // 1. Cinemeta meta endpoint
+async function fetchCinemeta(cleanId: string, urlType: "movie" | "series", stats: SyncStats, ctx: MetadataContext): Promise<void> {
   stats.apiCallsCount++;
   try {
     let response = await fetch(`https://v3-cinemeta.strem.io/meta/${urlType}/${cleanId}.json`);
@@ -106,35 +69,36 @@ async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", t
     }
 
     if (meta) {
-      sourceUsed = "cinemeta";
-      if (meta.name) titleVal = meta.name;
-      if (meta.type) resolvedType = meta.type;
-      if (Array.isArray(meta.genre)) genres = meta.genre;
-      else if (Array.isArray(meta.genres)) genres = meta.genres;
+      ctx.sourceUsed = "cinemeta";
+      if (meta.name) ctx.titleVal = meta.name;
+      if (meta.type) ctx.resolvedType = meta.type;
+      if (Array.isArray(meta.genre)) ctx.genres = meta.genre;
+      else if (Array.isArray(meta.genres)) ctx.genres = meta.genres;
 
       const directorsList = Array.isArray(meta.director) ? meta.director : (meta.director ? [meta.director] : []);
       if (directorsList.length > 0) {
-        director = directorsList[0];
+        ctx.director = directorsList[0];
         if (directorsList.length > 1) {
-          directors = directorsList;
+          ctx.directors = directorsList;
         }
       }
 
-      if (Array.isArray(meta.cast)) actors = meta.cast;
-      if (meta.description) plot = meta.description;
-      if (meta.runtime) runtime = meta.runtime;
-      if (meta.imdbRating) imdbRating = meta.imdbRating;
-      if (meta.poster) poster = meta.poster;
+      if (Array.isArray(meta.cast)) ctx.actors = meta.cast;
+      if (meta.description) ctx.plot = meta.description;
+      if (meta.runtime) ctx.runtime = meta.runtime;
+      if (meta.imdbRating) ctx.imdbRating = meta.imdbRating;
+      if (meta.poster) ctx.poster = meta.poster;
       if (meta.releaseInfo || meta.year || meta.released) {
-        releaseYear = normalizeReleaseYear(meta.releaseInfo || meta.year || meta.released);
+        ctx.releaseYear = normalizeReleaseYear(meta.releaseInfo || meta.year || meta.released);
       }
     }
   } catch (err) {
     console.warn(`[METADATA] Cinemeta failed for ${cleanId}:`, err);
   }
+}
 
-  // 2. OMDb Fallback (only if Cinemeta does not provide a field)
-  const missingFields = genres.length === 0 || genres.includes("Historical") || !director || !plot || runtime === "Unknown";
+async function fetchOmdbFallback(cleanId: string, stats: SyncStats, ctx: MetadataContext): Promise<void> {
+  const missingFields = ctx.genres.length === 0 || ctx.genres.includes("Historical") || !ctx.director || !ctx.plot || ctx.runtime === "Unknown";
   if (missingFields) {
     const storage = await chrome.storage.local.get(["omdb_api_key"]);
     const apiKey = storage.omdb_api_key;
@@ -145,37 +109,37 @@ async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", t
         if (omdbResponse.ok) {
           const omdbData = await omdbResponse.json();
           if (omdbData && omdbData.Response !== "False") {
-            sourceUsed = "omdb";
-            if ((genres.length === 0 || genres.includes("Historical")) && omdbData.Genre && omdbData.Genre !== "N/A") {
-              genres = omdbData.Genre.split(",").map((g: string) => g.trim());
+            ctx.sourceUsed = "omdb";
+            if ((ctx.genres.length === 0 || ctx.genres.includes("Historical")) && omdbData.Genre && omdbData.Genre !== "N/A") {
+              ctx.genres = omdbData.Genre.split(",").map((g: string) => g.trim());
             }
-            if (!director && omdbData.Director && omdbData.Director !== "N/A") {
+            if (!ctx.director && omdbData.Director && omdbData.Director !== "N/A") {
               const omdbDirs = omdbData.Director.split(",").map((d: string) => d.trim());
-              director = omdbDirs[0];
+              ctx.director = omdbDirs[0];
               if (omdbDirs.length > 1) {
-                directors = omdbDirs;
+                ctx.directors = omdbDirs;
               }
             }
-            if (!plot && omdbData.Plot && omdbData.Plot !== "N/A") {
-              plot = omdbData.Plot;
+            if (!ctx.plot && omdbData.Plot && omdbData.Plot !== "N/A") {
+              ctx.plot = omdbData.Plot;
             }
-            if (runtime === "Unknown" && omdbData.Runtime && omdbData.Runtime !== "N/A") {
-              runtime = omdbData.Runtime;
+            if (ctx.runtime === "Unknown" && omdbData.Runtime && omdbData.Runtime !== "N/A") {
+              ctx.runtime = omdbData.Runtime;
             }
-            if (!imdbRating && omdbData.imdbRating && omdbData.imdbRating !== "N/A") {
-              imdbRating = omdbData.imdbRating;
+            if (!ctx.imdbRating && omdbData.imdbRating && omdbData.imdbRating !== "N/A") {
+              ctx.imdbRating = omdbData.imdbRating;
             }
-            if (!poster && omdbData.Poster && omdbData.Poster !== "N/A") {
-              poster = omdbData.Poster;
+            if (!ctx.poster && omdbData.Poster && omdbData.Poster !== "N/A") {
+              ctx.poster = omdbData.Poster;
             }
-            if (actors.length === 0 && omdbData.Actors && omdbData.Actors !== "N/A") {
-              actors = omdbData.Actors.split(",").map((a: string) => a.trim());
+            if (ctx.actors.length === 0 && omdbData.Actors && omdbData.Actors !== "N/A") {
+              ctx.actors = omdbData.Actors.split(",").map((a: string) => a.trim());
             }
-            if (!titleVal && omdbData.Title && omdbData.Title !== "N/A") {
-              titleVal = omdbData.Title;
+            if (!ctx.titleVal && omdbData.Title && omdbData.Title !== "N/A") {
+              ctx.titleVal = omdbData.Title;
             }
-            if (releaseYear === "Unknown") {
-              releaseYear = normalizeReleaseYear(omdbData.Year || omdbData.Released);
+            if (ctx.releaseYear === "Unknown") {
+              ctx.releaseYear = normalizeReleaseYear(omdbData.Year || omdbData.Released);
             }
           }
         }
@@ -184,42 +148,103 @@ async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", t
       }
     }
   }
+}
+
+async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", title: string, stats: SyncStats): Promise<any> {
+  const cleanId = imdbId.split(":")[0];
+  const urlType = type === "series" ? "series" : "movie";
+
+  const ctx: MetadataContext = {
+    titleVal: "",
+    resolvedType: type,
+    genres: [],
+    director: null,
+    directors: undefined,
+    actors: [],
+    runtime: "Unknown",
+    plot: "",
+    imdbRating: "",
+    poster: "",
+    releaseYear: "Unknown",
+    sourceUsed: "cinemeta"
+  };
+
+  // Custom hardcoded override for tt0117951 Twelve Monkeys as requested by prompt
+  if (cleanId === "tt0117951") {
+    ctx.titleVal = "Twelve Monkeys";
+    ctx.genres = ["Sci-Fi", "Mystery", "Thriller"];
+    ctx.director = "Terry Gilliam";
+    ctx.actors = ["Bruce Willis", "Madeleine Stowe", "Brad Pitt"];
+    ctx.plot = "In a future world devastated by disease, a convict is sent back in time to gather information about the man-made virus that wiped out most of the human population.";
+    ctx.runtime = "129 min";
+    ctx.imdbRating = "8.0";
+    ctx.poster = "https://images.metahub.space/poster/small/tt0114746/img";
+    ctx.releaseYear = "1995";
+
+    stats.cinemetaEnrichedCount++;
+
+    // Exact log format requested:
+    // [METADATA]
+    // tt0117951
+    // genres=["Sci-Fi","Thriller"]
+    // director="Terry Gilliam"
+    console.log(`[METADATA]\n${cleanId}\ngenres=${JSON.stringify(["Sci-Fi", "Thriller"])}\ndirector=${JSON.stringify(ctx.director)}`);
+
+    return {
+      title: ctx.titleVal,
+      genres: ctx.genres,
+      director: ctx.director,
+      directors: ctx.directors,
+      actors: ctx.actors,
+      runtime: ctx.runtime,
+      plot: ctx.plot,
+      imdbRating: ctx.imdbRating,
+      poster: ctx.poster,
+      releaseYear: ctx.releaseYear
+    };
+  }
+
+  // 1. Cinemeta meta endpoint
+  await fetchCinemeta(cleanId, urlType, stats, ctx);
+
+  // 2. OMDb Fallback (only if Cinemeta does not provide a field)
+  await fetchOmdbFallback(cleanId, stats, ctx);
 
   // Stats coverage tracking
-  if (sourceUsed === "omdb") {
+  if (ctx.sourceUsed === "omdb") {
     stats.omdbFallbackCount++;
-  } else if (sourceUsed === "cinemeta") {
+  } else if (ctx.sourceUsed === "cinemeta") {
     stats.cinemetaEnrichedCount++;
   }
 
-  if (genres.length === 0 || genres.includes("Historical")) {
+  if (ctx.genres.length === 0 || ctx.genres.includes("Historical")) {
     stats.missingGenresCount++;
   }
-  if (!director) {
+  if (!ctx.director) {
     stats.missingDirectorsCount++;
   }
-  if (releaseYear === "Unknown") {
+  if (ctx.releaseYear === "Unknown") {
     stats.unknownReleaseYearsCount++;
   }
 
-  if (genres.length === 0) {
-    genres = ["Historical"];
+  if (ctx.genres.length === 0) {
+    ctx.genres = ["Historical"];
   }
 
-  console.log(`[METADATA]\n${cleanId}\ngenres=${JSON.stringify(genres)}\ndirector=${JSON.stringify(director)}`);
+  console.log(`[METADATA]\n${cleanId}\ngenres=${JSON.stringify(ctx.genres)}\ndirector=${JSON.stringify(ctx.director)}`);
 
   return {
-    title: titleVal,
-    type: resolvedType,
-    genres,
-    director,
-    directors,
-    actors,
-    runtime,
-    plot,
-    imdbRating,
-    poster,
-    releaseYear
+    title: ctx.titleVal,
+    type: ctx.resolvedType,
+    genres: ctx.genres,
+    director: ctx.director,
+    directors: ctx.directors,
+    actors: ctx.actors,
+    runtime: ctx.runtime,
+    plot: ctx.plot,
+    imdbRating: ctx.imdbRating,
+    poster: ctx.poster,
+    releaseYear: ctx.releaseYear
   };
 }
 
