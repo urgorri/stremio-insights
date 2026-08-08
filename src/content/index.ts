@@ -16,7 +16,7 @@ interface SyncStats {
   unknownReleaseYearsCount: number;
 }
 
-function needsRepair(item: any, correctType?: string): boolean {
+export function needsRepair(item: any, correctType?: string): boolean {
   if (!item) return true;
 
   if (correctType && item.type !== correctType) return true;

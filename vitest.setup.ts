@@ -3,7 +3,7 @@ import { vi } from "vitest";
 // Mock chrome extension APIs
 const chromeMock = {
   runtime: {
-    sendMessage: vi.fn(),
+    sendMessage: vi.fn().mockResolvedValue({}),
     onMessage: {
       addListener: vi.fn(),
       removeListener: vi.fn()
