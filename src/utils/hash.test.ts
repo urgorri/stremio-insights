@@ -30,4 +30,46 @@ describe("Player Hash Parser", () => {
     expect(parsePlayerHash("#/discover")).toBeNull();
     expect(parsePlayerHash("#/detail/movie/tt1234567")).toBeNull();
   });
+
+  it("should return null for empty or invalid hash values", () => {
+    expect(parsePlayerHash("")).toBeNull();
+    // @ts-expect-error Testing invalid input
+    expect(parsePlayerHash(null)).toBeNull();
+    // @ts-expect-error Testing invalid input
+    expect(parsePlayerHash(undefined)).toBeNull();
+  });
+
+  it("should return null if the hash has fewer than 6 parts", () => {
+    expect(parsePlayerHash("#/player/local/movie")).toBeNull();
+    expect(parsePlayerHash("#/player/local/movie/tt1234567")).toBeNull();
+  });
+
+  it("should return null for unsupported types", () => {
+    expect(parsePlayerHash("#/player/local/channel/tt1234567/tt1234567")).toBeNull();
+    expect(parsePlayerHash("#/player/local/other/tt1234567/tt1234567")).toBeNull();
+  });
+
+  it("should parse series with missing colons in video_id without setting season/episode", () => {
+    const hash = "#/player/local/series/tt7654321/tt7654321";
+    const details = parsePlayerHash(hash);
+    expect(details).toEqual({
+      imdb_id: "tt7654321",
+      parent_id: "tt7654321",
+      type: "series",
+      season: undefined,
+      episode: undefined
+    });
+  });
+
+  it("should parse series with insufficient colon-separated parts in video_id without setting season/episode", () => {
+    const hash = "#/player/local/series/tt7654321/tt7654321:2";
+    const details = parsePlayerHash(hash);
+    expect(details).toEqual({
+      imdb_id: "tt7654321:2",
+      parent_id: "tt7654321",
+      type: "series",
+      season: undefined,
+      episode: undefined
+    });
+  });
 });
