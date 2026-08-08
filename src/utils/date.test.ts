@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   formatBuenosAiresDate,
   normalizeTimestamp,
@@ -26,6 +26,25 @@ describe("Date Formatting - America/Argentina/Buenos_Aires", () => {
   it("should gracefully handle invalid date inputs", () => {
     const formatted = formatBuenosAiresDate("invalid-date-string");
     expect(formatted).toBe("");
+  });
+
+  it("should fallback to local formatting if Intl.DateTimeFormat fails for full date", () => {
+    // Mock Intl.DateTimeFormat to throw an error
+    const spy = vi.spyOn(Intl, "DateTimeFormat").mockImplementation(() => {
+      throw new Error("Intl error");
+    });
+
+    const dateStr = "2026-07-25T22:31:00.000Z";
+    const d = new Date(dateStr);
+    const formatted = formatBuenosAiresDate(dateStr);
+
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    const expected = `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+    expect(formatted).toBe(expected);
+
+    // Restore the mock
+    spy.mockRestore();
   });
 });
 
@@ -87,5 +106,24 @@ describe("New Utility Functions - normalizeReleaseYear and formatBuenosAiresDate
   it("should format dates as DD-MM-YYYY in Buenos Aires timezone", () => {
     const dateUtc = "2026-07-25T22:31:00.000Z"; // 19:31 in Buenos Aires (-3 hours)
     expect(formatBuenosAiresDateOnly(dateUtc)).toBe("25-07-2026");
+  });
+
+  it("should fallback to local formatting if Intl.DateTimeFormat fails for date only", () => {
+    // Mock Intl.DateTimeFormat to throw an error
+    const spy = vi.spyOn(Intl, "DateTimeFormat").mockImplementation(() => {
+      throw new Error("Intl error");
+    });
+
+    const dateStr = "2026-07-25T22:31:00.000Z";
+    const d = new Date(dateStr);
+    const formatted = formatBuenosAiresDateOnly(dateStr);
+
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    const expected = `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
+
+    expect(formatted).toBe(expected);
+
+    // Restore the mock
+    spy.mockRestore();
   });
 });
