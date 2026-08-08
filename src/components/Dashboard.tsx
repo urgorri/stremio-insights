@@ -608,38 +608,49 @@ export const Dashboard: React.FC = () => {
                   })}
                 </div>
 
-                {/* 31 Days Rows (Vertical) */}
-                {Array.from({ length: 31 }).map((_, d) => {
-                  const dayNum = d + 1;
-                  const dayLabel = String(dayNum).padStart(2, "0");
+                {/* Pre-compute heatmap map for O(1) lookups */}
+                {(() => {
+                  const heatmapMap = new Map();
+                  if (stats?.heatmap) {
+                    for (const item of stats.heatmap) {
+                      heatmapMap.set(`${item.month}-${item.day}`, item);
+                    }
+                  }
+
                   return (
-                    <div key={d} className="flex gap-0.5 items-center">
-                      {/* Day Row Label */}
-                      <span className="w-5 text-[8px] text-gray-400 font-bold shrink-0 text-right pr-1">{dayLabel}</span>
+                    <>
+                      {/* 31 Days Rows (Vertical) */}
+                      {Array.from({ length: 31 }).map((_, d) => {
+                        const dayNum = d + 1;
+                        const dayLabel = String(dayNum).padStart(2, "0");
+                        return (
+                          <div key={d} className="flex gap-0.5 items-center">
+                            {/* Day Row Label */}
+                            <span className="w-5 text-[8px] text-gray-400 font-bold shrink-0 text-right pr-1">{dayLabel}</span>
 
-                      {/* 12 Months Columns */}
-                      {Array.from({ length: 12 }).map((_, m) => {
-                        const monthNum = m + 1;
+                            {/* 12 Months Columns */}
+                            {Array.from({ length: 12 }).map((_, m) => {
+                              const monthNum = m + 1;
 
-                        // Check if this date is valid in the current year
-                        const currentYear = new Date().getFullYear();
-                        const checkDate = new Date(currentYear, monthNum - 1, dayNum);
-                        const isValid =
-                          checkDate.getFullYear() === currentYear &&
-                          checkDate.getMonth() === monthNum - 1 &&
-                          checkDate.getDate() === dayNum;
+                              // Check if this date is valid in the current year
+                              const currentYear = new Date().getFullYear();
+                              const checkDate = new Date(currentYear, monthNum - 1, dayNum);
+                              const isValid =
+                                checkDate.getFullYear() === currentYear &&
+                                checkDate.getMonth() === monthNum - 1 &&
+                                checkDate.getDate() === dayNum;
 
-                        if (!isValid) {
-                          return (
-                            <div
-                              key={m}
-                              className="w-5 h-5 shrink-0 bg-transparent"
-                            />
-                          );
-                        }
+                              if (!isValid) {
+                                return (
+                                  <div
+                                    key={m}
+                                    className="w-5 h-5 shrink-0 bg-transparent"
+                                  />
+                                );
+                              }
 
-                        const cell = stats?.heatmap?.find((item) => item.month === monthNum && item.day === dayNum);
-                        const count = cell?.count || 0;
+                              const cell = heatmapMap.get(`${monthNum}-${dayNum}`);
+                              const count = cell?.count || 0;
 
                         // Select color depth based on watch frequency
                         let bgClass = "bg-gray-800/20";
@@ -665,6 +676,9 @@ export const Dashboard: React.FC = () => {
                     </div>
                   );
                 })}
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </div>
