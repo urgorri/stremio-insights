@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useInsightsStore } from "../hooks/useInsightsStore";
 import { formatBuenosAiresDate, formatBuenosAiresDateOnly, normalizeReleaseYear } from "../utils/date";
+import { MONTH_NAMES } from "../utils/constants";
 import { groupEventsIntoTimeline } from "../analytics/stats";
 import {
   Tv,
@@ -414,12 +415,8 @@ export const Dashboard: React.FC = () => {
                 Object.entries(timeline)
                   .sort(([yearA], [yearB]) => Number(yearB) - Number(yearA))
                   .map(([year, monthsObj]) => {
-                    const months = [
-                      "January", "February", "March", "April", "May", "June",
-                      "July", "August", "September", "October", "November", "December"
-                    ];
                     const sortedMonths = Object.entries(monthsObj).sort(
-                      ([monthA], [monthB]) => months.indexOf(monthB) - months.indexOf(monthA)
+                      ([monthA], [monthB]) => MONTH_NAMES.indexOf(monthB) - MONTH_NAMES.indexOf(monthA)
                     );
                     return (
                       <div key={year} className="space-y-2">
@@ -649,15 +646,11 @@ export const Dashboard: React.FC = () => {
                         else if (count >= 10) bgClass = "bg-purple-400 shadow-[0_0_4px_#a855f7]";
 
                         // Tooltip info
-                        const monthsNames = [
-                          "January", "February", "March", "April", "May", "June",
-                          "July", "August", "September", "October", "November", "December"
-                        ];
 
                         return (
                           <div
                             key={m}
-                            title={`${monthsNames[m]} ${dayLabel}: ${count} watch events`}
+                            title={`${MONTH_NAMES[m]} ${dayLabel}: ${count} watch events`}
                             className={`w-5 h-5 rounded-sm transition-colors cursor-help flex items-center justify-center shrink-0 ${bgClass}`}
                           />
                         );

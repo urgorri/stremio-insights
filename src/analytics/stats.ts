@@ -1,5 +1,6 @@
 import { PlaybackEvent, WatchStats } from "../types";
 import { normalizeTimestamp } from "../utils/date";
+import { MONTH_NAMES } from "../utils/constants";
 
 export interface AnalyticsSummary extends WatchStats {
   mostWatchedYear: number;
@@ -109,10 +110,6 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
 
   // Timeline (using watch time)
   const timeline: Record<string, PlaybackEvent[]> = {};
-  const months = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
   library
     .slice()
     .sort((a, b) => getWatchTime(b) - getWatchTime(a))
@@ -121,7 +118,7 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
       if (ts) {
         const d = new Date(ts);
         if (!isNaN(d.getTime())) {
-          const monthYear = `${months[d.getMonth()]} ${d.getFullYear()}`;
+          const monthYear = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
           if (!timeline[monthYear]) {
             timeline[monthYear] = [];
           }
@@ -239,11 +236,6 @@ export function groupEventsIntoTimeline(events: PlaybackEvent[]): Record<string,
   const sorted = [...events].sort((a, b) => getWatchTime(b) - getWatchTime(a));
   const timeline: Record<string, Record<string, PlaybackEvent[]>> = {};
 
-  const months = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
-
   for (const event of sorted) {
     const ts = getWatchTime(event);
     if (!ts) continue;
@@ -251,7 +243,7 @@ export function groupEventsIntoTimeline(events: PlaybackEvent[]): Record<string,
     if (isNaN(d.getTime())) continue;
 
     const year = String(d.getFullYear());
-    const month = months[d.getMonth()];
+    const month = MONTH_NAMES[d.getMonth()];
 
     if (!timeline[year]) {
       timeline[year] = {};
