@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   formatBuenosAiresDate,
   normalizeTimestamp,
@@ -26,6 +26,22 @@ describe("Date Formatting - America/Argentina/Buenos_Aires", () => {
   it("should gracefully handle invalid date inputs", () => {
     const formatted = formatBuenosAiresDate("invalid-date-string");
     expect(formatted).toBe("");
+  });
+
+  it("should fallback to basic formatting when Intl.DateTimeFormat throws an error", () => {
+    const spy = vi.spyOn(Intl, "DateTimeFormat").mockImplementation(() => {
+      throw new Error("Intl fallback test error");
+    });
+
+    const testDateStr = "2026-07-25T09:05:00.000Z";
+    const d = new Date(testDateStr);
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    const expectedFallback = `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+    const formatted = formatBuenosAiresDate(testDateStr);
+    expect(formatted).toBe(expectedFallback);
+
+    spy.mockRestore();
   });
 });
 
@@ -87,5 +103,21 @@ describe("New Utility Functions - normalizeReleaseYear and formatBuenosAiresDate
   it("should format dates as DD-MM-YYYY in Buenos Aires timezone", () => {
     const dateUtc = "2026-07-25T22:31:00.000Z"; // 19:31 in Buenos Aires (-3 hours)
     expect(formatBuenosAiresDateOnly(dateUtc)).toBe("25-07-2026");
+  });
+
+  it("should fallback to basic formatting when Intl.DateTimeFormat throws an error for formatBuenosAiresDateOnly", () => {
+    const spy = vi.spyOn(Intl, "DateTimeFormat").mockImplementation(() => {
+      throw new Error("Intl fallback test error");
+    });
+
+    const testDateStr = "2026-07-25T09:05:00.000Z";
+    const d = new Date(testDateStr);
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    const expectedFallback = `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
+
+    const formatted = formatBuenosAiresDateOnly(testDateStr);
+    expect(formatted).toBe(expectedFallback);
+
+    spy.mockRestore();
   });
 });
