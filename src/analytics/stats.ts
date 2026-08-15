@@ -60,8 +60,9 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
 
   // Sort by watch time to find lastWatched
   const sortedDescending = library
-    .slice()
-    .sort((a, b) => getWatchTime(b) - getWatchTime(a));
+    .map(item => ({ item, watchTime: getWatchTime(item) }))
+    .sort((a, b) => b.watchTime - a.watchTime)
+    .map(({ item }) => item);
   stats.lastWatched = sortedDescending[0] || null;
 
   // Most watched year
@@ -234,7 +235,10 @@ export function groupEventsIntoTimeline(events: PlaybackEvent[]): Record<string,
     return normalizeTimestamp(e.finished_at || e.started_at);
   };
 
-  const sorted = [...events].sort((a, b) => getWatchTime(b) - getWatchTime(a));
+  const sorted = events
+    .map(item => ({ item, watchTime: getWatchTime(item) }))
+    .sort((a, b) => b.watchTime - a.watchTime)
+    .map(({ item }) => item);
   const timeline: Record<string, Record<string, PlaybackEvent[]>> = {};
 
   for (const event of sorted) {
