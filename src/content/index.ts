@@ -97,55 +97,56 @@ async function fetchCinemeta(cleanId: string, urlType: "movie" | "series", stats
   }
 }
 
-async function fetchOmdbFallback(cleanId: string, stats: SyncStats, ctx: MetadataContext): Promise<void> {
-  const missingFields = ctx.genres.length === 0 || ctx.genres.includes("Historical") || !ctx.director || !ctx.plot || ctx.runtime === "Unknown";
-  if (missingFields) {
-    const storage = await chrome.storage.local.get(["omdb_api_key"]);
-    const apiKey = storage.omdb_api_key;
-    if (apiKey) {
-      stats.apiCallsCount++;
-      try {
-        const omdbResponse = await fetch(`https://www.omdbapi.com/?i=${cleanId}&apikey=${apiKey}`);
-        if (omdbResponse.ok) {
-          const omdbData = await omdbResponse.json();
-          if (omdbData && omdbData.Response !== "False") {
-            ctx.sourceUsed = "omdb";
-            if ((ctx.genres.length === 0 || ctx.genres.includes("Historical")) && omdbData.Genre && omdbData.Genre !== "N/A") {
-              ctx.genres = omdbData.Genre.split(",").map((g: string) => g.trim());
-            }
-            if (!ctx.director && omdbData.Director && omdbData.Director !== "N/A") {
-              const omdbDirs = omdbData.Director.split(",").map((d: string) => d.trim());
-              ctx.director = omdbDirs[0];
-              if (omdbDirs.length > 1) {
-                ctx.directors = omdbDirs;
-              }
-            }
-            if (!ctx.plot && omdbData.Plot && omdbData.Plot !== "N/A") {
-              ctx.plot = omdbData.Plot;
-            }
-            if (ctx.runtime === "Unknown" && omdbData.Runtime && omdbData.Runtime !== "N/A") {
-              ctx.runtime = omdbData.Runtime;
-            }
-            if (!ctx.imdbRating && omdbData.imdbRating && omdbData.imdbRating !== "N/A") {
-              ctx.imdbRating = omdbData.imdbRating;
-            }
-            if (!ctx.poster && omdbData.Poster && omdbData.Poster !== "N/A") {
-              ctx.poster = omdbData.Poster;
-            }
-            if (ctx.actors.length === 0 && omdbData.Actors && omdbData.Actors !== "N/A") {
-              ctx.actors = omdbData.Actors.split(",").map((a: string) => a.trim());
-            }
-            if (!ctx.titleVal && omdbData.Title && omdbData.Title !== "N/A") {
-              ctx.titleVal = omdbData.Title;
-            }
-            if (ctx.releaseYear === "Unknown") {
-              ctx.releaseYear = normalizeReleaseYear(omdbData.Year || omdbData.Released);
-            }
-          }
-        }
-      } catch (omdbErr) {
-        console.warn(`[METADATA] OMDb fallback failed for ${cleanId}:`, omdbErr);
+async function fetchOmdbData(cleanId: string, stats: SyncStats): Promise<any> {
+  const storage = await chrome.storage.local.get(["omdb_api_key"]);
+  const apiKey = storage.omdb_api_key;
+  if (!apiKey) return null;
+
+  stats.apiCallsCount++;
+  try {
+    const omdbResponse = await fetch(`https://www.omdbapi.com/?i=${cleanId}&apikey=${apiKey}`);
+    if (omdbResponse.ok) {
+      return await omdbResponse.json();
+    }
+  } catch (omdbErr) {
+    console.warn(`[METADATA] OMDb fallback failed for ${cleanId}:`, omdbErr);
+  }
+  return null;
+}
+
+function applyOmdbFallback(omdbData: any, ctx: MetadataContext): void {
+  if (omdbData && omdbData.Response !== "False") {
+    ctx.sourceUsed = "omdb";
+    if ((ctx.genres.length === 0 || ctx.genres.includes("Historical")) && omdbData.Genre && omdbData.Genre !== "N/A") {
+      ctx.genres = omdbData.Genre.split(",").map((g: string) => g.trim());
+    }
+    if (!ctx.director && omdbData.Director && omdbData.Director !== "N/A") {
+      const omdbDirs = omdbData.Director.split(",").map((d: string) => d.trim());
+      ctx.director = omdbDirs[0];
+      if (omdbDirs.length > 1) {
+        ctx.directors = omdbDirs;
       }
+    }
+    if (!ctx.plot && omdbData.Plot && omdbData.Plot !== "N/A") {
+      ctx.plot = omdbData.Plot;
+    }
+    if (ctx.runtime === "Unknown" && omdbData.Runtime && omdbData.Runtime !== "N/A") {
+      ctx.runtime = omdbData.Runtime;
+    }
+    if (!ctx.imdbRating && omdbData.imdbRating && omdbData.imdbRating !== "N/A") {
+      ctx.imdbRating = omdbData.imdbRating;
+    }
+    if (!ctx.poster && omdbData.Poster && omdbData.Poster !== "N/A") {
+      ctx.poster = omdbData.Poster;
+    }
+    if (ctx.actors.length === 0 && omdbData.Actors && omdbData.Actors !== "N/A") {
+      ctx.actors = omdbData.Actors.split(",").map((a: string) => a.trim());
+    }
+    if (!ctx.titleVal && omdbData.Title && omdbData.Title !== "N/A") {
+      ctx.titleVal = omdbData.Title;
+    }
+    if (ctx.releaseYear === "Unknown") {
+      ctx.releaseYear = normalizeReleaseYear(omdbData.Year || omdbData.Released);
     }
   }
 }
@@ -204,11 +205,18 @@ async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", t
     };
   }
 
-  // 1. Cinemeta meta endpoint
+  // 1. Start fetching OMDb concurrently
+  const omdbPromise = fetchOmdbData(cleanId, stats);
+
+  // 2. Cinemeta meta endpoint
   await fetchCinemeta(cleanId, urlType, stats, ctx);
 
-  // 2. OMDb Fallback (only if Cinemeta does not provide a field)
-  await fetchOmdbFallback(cleanId, stats, ctx);
+  // 3. OMDb Fallback (only if Cinemeta does not provide a field)
+  const missingFields = ctx.genres.length === 0 || ctx.genres.includes("Historical") || !ctx.director || !ctx.plot || ctx.runtime === "Unknown";
+  if (missingFields) {
+    const omdbData = await omdbPromise;
+    applyOmdbFallback(omdbData, ctx);
+  }
 
   // Stats coverage tracking
   if (ctx.sourceUsed === "omdb") {
