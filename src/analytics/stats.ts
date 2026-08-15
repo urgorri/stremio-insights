@@ -54,15 +54,36 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
   };
 
   // Find firstRecorded by finding the minimum first watch time
-  stats.firstRecorded = library.length > 0
-    ? library.reduce((min, curr) => getFirstWatchTime(curr) < getFirstWatchTime(min) ? curr : min)
-    : null;
+  // And also precompute watch time to optimize sorting
+  let sortedDescending: PlaybackEvent[] = [];
 
-  // Sort by watch time to find lastWatched
-  const sortedDescending = library
-    .slice()
-    .sort((a, b) => getWatchTime(b) - getWatchTime(a));
-  stats.lastWatched = sortedDescending[0] || null;
+  if (library.length > 0) {
+    let minItem = library[0];
+    let minTime = getFirstWatchTime(minItem);
+
+    const enriched = new Array(library.length);
+    enriched[0] = { item: library[0], watchTime: getWatchTime(library[0]) };
+
+    for (let i = 1; i < library.length; i++) {
+      const item = library[i];
+      const currFirstTime = getFirstWatchTime(item);
+      if (currFirstTime < minTime) {
+        minTime = currFirstTime;
+        minItem = item;
+      }
+      enriched[i] = { item, watchTime: getWatchTime(item) };
+    }
+
+    stats.firstRecorded = minItem;
+
+    // Sort by precomputed watch time to find lastWatched
+    enriched.sort((a, b) => b.watchTime - a.watchTime);
+    sortedDescending = enriched.map(x => x.item);
+    stats.lastWatched = sortedDescending[0] || null;
+  } else {
+    stats.firstRecorded = null;
+    stats.lastWatched = null;
+  }
 
   // Most watched year
   const libraryYearCounts: Record<number, number> = {};
