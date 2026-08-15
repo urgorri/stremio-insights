@@ -451,7 +451,7 @@ export const Dashboard: React.FC = () => {
 
                               const id = event.imdbId || event.imdb_id;
                               const cleanId = event.type === "series" ? (event.parent_id || id?.split(":")[0]) : id;
-                              const stremioUrl = `https://web.stremio.com/#/detail/${event.type}/${cleanId}`;
+                              const stremioUrl = `https://web.stremio.com/#/detail/${encodeURIComponent(event.type || "")}/${encodeURIComponent(cleanId || "")}`;
 
                               return (
                                 <a
