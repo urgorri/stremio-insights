@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { needsRepair } from "./index";
+import { needsRepair } from "./sync";
 
 describe("needsRepair", () => {
   it("should return true if item is falsy", () => {
