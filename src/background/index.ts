@@ -73,13 +73,13 @@ async function injectContentScripts(tabId: number): Promise<void> {
     if (!isStremio) continue;
 
     const files = cs.js;
-    const world = (cs as any).world === "MAIN" ? "MAIN" : "ISOLATED";
+    const world: chrome.scripting.ExecutionWorld = (cs as { world?: string }).world === "MAIN" ? "MAIN" : "ISOLATED";
 
     try {
       await chrome.scripting.executeScript({
         target: { tabId },
         files,
-        world: world as any
+        world
       });
     } catch (err) {
       console.error(`[STREMIO] Dynamic injection failed for tab ${tabId} world ${world}:`, err);

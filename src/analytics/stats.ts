@@ -6,6 +6,16 @@ export const MONTHS = [
   "July", "August", "September", "October", "November", "December"
 ];
 
+export const getWatchTime = (e: PlaybackEvent) => {
+  if (e.lastWatched) return normalizeTimestamp(e.lastWatched);
+  return normalizeTimestamp(e.finished_at || e.started_at);
+};
+
+export const getFirstWatchTime = (e: PlaybackEvent) => {
+  if (e.firstWatched) return normalizeTimestamp(e.firstWatched);
+  return normalizeTimestamp(e.started_at);
+};
+
 export interface AnalyticsSummary extends WatchStats {
   mostWatchedYear: number;
   timeline: Record<string, PlaybackEvent[]>;
@@ -41,17 +51,6 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
   const directorCounts: Record<string, number> = {};
   const yearCounts: Record<string, number> = {};
   const titleCounts: Record<string, { count: number; type: string }> = {};
-
-  // Resolve watch timestamp helper, preferring lastWatched, falling back to finished_at or started_at
-  const getWatchTime = (e: PlaybackEvent) => {
-    if (e.lastWatched) return normalizeTimestamp(e.lastWatched);
-    return normalizeTimestamp(e.finished_at || e.started_at);
-  };
-
-  const getFirstWatchTime = (e: PlaybackEvent) => {
-    if (e.firstWatched) return normalizeTimestamp(e.firstWatched);
-    return normalizeTimestamp(e.started_at);
-  };
 
   // Find firstRecorded by finding the minimum first watch time
   stats.firstRecorded = library.length > 0
@@ -229,11 +228,6 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
 }
 
 export function groupEventsIntoTimeline(events: PlaybackEvent[]): Record<string, Record<string, PlaybackEvent[]>> {
-  const getWatchTime = (e: PlaybackEvent) => {
-    if (e.lastWatched) return normalizeTimestamp(e.lastWatched);
-    return normalizeTimestamp(e.finished_at || e.started_at);
-  };
-
   const sorted = [...events].sort((a, b) => getWatchTime(b) - getWatchTime(a));
   const timeline: Record<string, Record<string, PlaybackEvent[]>> = {};
 

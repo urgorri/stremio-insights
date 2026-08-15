@@ -4,6 +4,11 @@ import { Dashboard } from "../components/Dashboard";
 import { computeAnalytics } from "../analytics/stats";
 import { normalizeReleaseYear } from "../utils/date";
 import { useInsightsStore } from "../hooks/useInsightsStore";
+import {
+  CONTENT_TYPE_MOVIE,
+  GENRE_HISTORICAL,
+  RELEASE_YEAR_UNKNOWN
+} from "../utils/constants";
 
 console.log("[SYNC] Content Script loaded.");
 
@@ -22,15 +27,15 @@ export function needsRepair(item: any, correctType?: string): boolean {
   if (correctType && item.type !== correctType) return true;
 
   // 1. Repair genres: length == 1 and genres[0] == "Historical"
-  const hasHistoricalGenre = Array.isArray(item.genres) && item.genres.length === 1 && item.genres[0] === "Historical";
+  const hasHistoricalGenre = Array.isArray(item.genres) && item.genres.length === 1 && item.genres[0] === GENRE_HISTORICAL;
   const missingGenres = !item.genres || !Array.isArray(item.genres) || item.genres.length === 0;
 
   // 2. Repair director: director == null (only for movies!)
-  const missingDirector = item.type === "movie" && (item.director === null || item.director === undefined);
+  const missingDirector = item.type === CONTENT_TYPE_MOVIE && (item.director === null || item.director === undefined);
 
   // 3. Repair releaseYear malformed or missing
   const releaseYear = item.releaseYear;
-  const isMalformedYear = !releaseYear || releaseYear === "Unknown" || !/^\d{4}$/.test(releaseYear);
+  const isMalformedYear = !releaseYear || releaseYear === RELEASE_YEAR_UNKNOWN || !/^\d{4}$/.test(releaseYear);
 
   return hasHistoricalGenre || missingGenres || missingDirector || isMalformedYear;
 }
