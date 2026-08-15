@@ -697,7 +697,7 @@ if (typeof window !== "undefined") {
 }
 
 // Injects React slidebar/dashboard inside the Stremio container
-function injectInsightsSidebar() {
+export function injectInsightsSidebar() {
   if (document.getElementById("stremio-insights-sidebar-wrapper")) return;
 
   const toggleBtn = document.createElement("button");
