@@ -114,8 +114,8 @@ describe("Analytics & Statistics", () => {
         type: "movie",
         started_at: "2023-01-01T12:00:00.000Z", // January
         finished_at: "2023-02-01T12:00:00.000Z", // February
-        lastWatched: "2023-03-01T12:00:00.000Z", // March (Should win)
-      } as PlaybackEvent,
+        lastWatched: new Date("2023-03-01T12:00:00.000Z").getTime(), // March (Should win)
+      } as unknown as PlaybackEvent,
       {
         imdb_id: "tt2",
         title: "Priority Test 2",
