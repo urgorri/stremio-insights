@@ -234,12 +234,21 @@ export function groupEventsIntoTimeline(events: PlaybackEvent[]): Record<string,
     return normalizeTimestamp(e.finished_at || e.started_at);
   };
 
-  const sorted = [...events].sort((a, b) => getWatchTime(b) - getWatchTime(a));
+  const eventsWithTime = [];
+  for (let i = 0; i < events.length; i++) {
+    const event = events[i];
+    const ts = getWatchTime(event);
+    if (ts) {
+      eventsWithTime.push({ event, ts });
+    }
+  }
+
+  eventsWithTime.sort((a, b) => b.ts - a.ts);
+
   const timeline: Record<string, Record<string, PlaybackEvent[]>> = {};
 
-  for (const event of sorted) {
-    const ts = getWatchTime(event);
-    if (!ts) continue;
+  for (let i = 0; i < eventsWithTime.length; i++) {
+    const { event, ts } = eventsWithTime[i];
     const d = new Date(ts);
     if (isNaN(d.getTime())) continue;
 
