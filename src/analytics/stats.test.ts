@@ -115,14 +115,14 @@ describe("Analytics & Statistics", () => {
         started_at: "2023-01-01T12:00:00.000Z", // January
         finished_at: "2023-02-01T12:00:00.000Z", // February
         lastWatched: "2023-03-01T12:00:00.000Z", // March (Should win)
-      } as PlaybackEvent,
+      } as unknown as PlaybackEvent,
       {
         imdb_id: "tt2",
         title: "Priority Test 2",
         type: "movie",
         started_at: "2024-01-01T12:00:00.000Z", // January
         finished_at: "2024-02-01T12:00:00.000Z", // February (Should win)
-      } as PlaybackEvent
+      } as unknown as PlaybackEvent,
     ];
 
     const timeline = groupEventsIntoTimeline(events);
