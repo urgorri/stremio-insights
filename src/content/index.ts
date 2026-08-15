@@ -105,7 +105,7 @@ async function fetchOmdbFallback(cleanId: string, stats: SyncStats, ctx: Metadat
     if (apiKey) {
       stats.apiCallsCount++;
       try {
-        const omdbResponse = await fetch(`https://www.omdbapi.com/?i=${cleanId}&apikey=${apiKey}`);
+        const omdbResponse = await fetch(`https://www.omdbapi.com/?i=${encodeURIComponent(cleanId)}&apikey=${encodeURIComponent(apiKey)}`);
         if (omdbResponse.ok) {
           const omdbData = await omdbResponse.json();
           if (omdbData && omdbData.Response !== "False") {
