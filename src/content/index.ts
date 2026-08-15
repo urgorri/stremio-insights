@@ -53,7 +53,7 @@ interface MetadataContext {
 async function fetchCinemeta(cleanId: string, urlType: "movie" | "series", stats: SyncStats, ctx: MetadataContext): Promise<void> {
   stats.apiCallsCount++;
   try {
-    let response = await fetch(`https://v3-cinemeta.strem.io/meta/${urlType}/${cleanId}.json`);
+    let response = await fetch(`https://v3-cinemeta.strem.io/meta/${encodeURIComponent(urlType)}/${encodeURIComponent(cleanId)}.json`);
     let data = response.ok ? await response.json() : null;
     let meta = data && data.meta;
 
@@ -61,7 +61,7 @@ async function fetchCinemeta(cleanId: string, urlType: "movie" | "series", stats
       const fallbackType = urlType === "series" ? "movie" : "series";
       console.log(`[SYNC] Cinemeta ${urlType} failed for ${cleanId}, trying fallback type ${fallbackType}`);
       stats.apiCallsCount++;
-      const fallbackResponse = await fetch(`https://v3-cinemeta.strem.io/meta/${fallbackType}/${cleanId}.json`);
+      const fallbackResponse = await fetch(`https://v3-cinemeta.strem.io/meta/${encodeURIComponent(fallbackType)}/${encodeURIComponent(cleanId)}.json`);
       if (fallbackResponse.ok) {
         data = await fallbackResponse.json();
         meta = data && data.meta;
