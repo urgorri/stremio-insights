@@ -145,4 +145,45 @@ describe("window.fetch interceptor", () => {
     expect(originalFetch).toHaveBeenCalledWith("https://api.strem.io/api/datastorePut", expect.any(Object));
     expect(response).toBe(mockResponse);
   });
+
+  it("should validate non-object request or response bodies and sanitize prototype pollution", async () => {
+    await injectInterceptor();
+
+    // Body parses to non-object (e.g., boolean or primitive string or array or prototype pollution object)
+    const requestBody = JSON.stringify({
+      validKey: "validValue",
+      __proto__: { polluted: true },
+      nested: {
+        constructor: "bad",
+        safeKey: 123
+      }
+    });
+
+    const responseBody = ["not", "an", "object"];
+
+    const mockResponse = {
+      clone: () => ({ json: vi.fn().mockResolvedValue(responseBody) })
+    };
+    (originalFetch as any).mockResolvedValue(mockResponse);
+
+    await window.fetch("https://api.strem.io/api/datastorePut", {
+      method: "POST",
+      body: requestBody
+    });
+
+    expect(dispatchEventSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "STREMIO_DATASTORE_PUT_INTERCEPTED",
+        detail: {
+          request: {
+            validKey: "validValue",
+            nested: {
+              safeKey: 123
+            }
+          },
+          response: {} // array response gets sanitized to {} because response is expected to be object
+        }
+      })
+    );
+  });
 });
