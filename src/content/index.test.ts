@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { needsRepair } from "./index";
+import { needsRepair, mapConcurrent } from "./index";
 import { CONTENT_TYPE_MOVIE, CONTENT_TYPE_SERIES, GENRE_HISTORICAL, RELEASE_YEAR_UNKNOWN } from "../utils/constants";
 
 describe("needsRepair", () => {
@@ -85,5 +85,37 @@ describe("needsRepair", () => {
         expect(needsRepair(item)).toBe(true);
       });
     });
+  });
+});
+
+describe("mapConcurrent", () => {
+  it("should return empty array when items array is empty", async () => {
+    const res = await mapConcurrent([], 5, async (x) => x);
+    expect(res).toEqual([]);
+  });
+
+  it("should return results in correct order", async () => {
+    const items = [100, 50, 20, 10];
+    const res = await mapConcurrent(items, 2, async (delay, index) => {
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return index;
+    });
+    expect(res).toEqual([0, 1, 2, 3]);
+  });
+
+  it("should strictly limit active concurrency to specified limit", async () => {
+    const items = Array.from({ length: 20 }, (_, i) => i);
+    let active = 0;
+    let maxActive = 0;
+
+    await mapConcurrent(items, 5, async () => {
+      active++;
+      maxActive = Math.max(maxActive, active);
+      await new Promise(resolve => setTimeout(resolve, 10));
+      active--;
+    });
+
+    expect(maxActive).toBeLessThanOrEqual(5);
+    expect(maxActive).toBe(5);
   });
 });
