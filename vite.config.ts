@@ -24,8 +24,6 @@ export default defineConfig({
         "dist/**",
         "src/popup/**",
         "src/options/**",
-
-        "src/background/**",
         "src/components/**",
         "src/hooks/**",
         "src/types/**",
