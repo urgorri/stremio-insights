@@ -1,3 +1,4 @@
+export {};
 // MAIN world content script
 // Used to intercept native fetch/XHR calls that happen in the main page context
 
