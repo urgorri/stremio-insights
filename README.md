@@ -169,6 +169,20 @@ Analytics Engine
 
 ---
 
+## Privacy Policy & GitHub Pages
+
+The official Privacy Policy website for **Stremio Insights** is included directly in this repository under the [`/docs`](docs/index.html) directory.
+
+To host the Privacy Policy on GitHub Pages:
+1. Go to **Settings > Pages** in your GitHub repository.
+2. Select **Source**: `Deploy from a branch`.
+3. Choose branch `main` and folder `/docs`.
+4. Click **Save**.
+
+Your Privacy Policy will be live at `https://<username>.github.io/stremio-insights/`.
+
+---
+
 ## License
 
 MIT

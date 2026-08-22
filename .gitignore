@@ -135,4 +135,16 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
+# Extension signing keys and binaries
+*.pem
+*.crx
+dist.pem
+dist.crx
+
+# Test results & coverage
+test-results/
+coverage/
+
+# Extension build directory
+dist/
 dist.**
