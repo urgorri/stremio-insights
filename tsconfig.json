@@ -26,6 +26,5 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["src", "manifest.config.ts", "vite.config.ts"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/analytics/benchmark.ts"]
+  "include": ["src", "manifest.config.ts", "vite.config.ts", "vitest.setup.ts"]
 }

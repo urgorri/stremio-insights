@@ -101,7 +101,7 @@ describe("injectInsightsSidebar", () => {
 
   beforeEach(() => {
     document.body.innerHTML = "";
-    performSyncSpy = vi.spyOn(useInsightsStore.getState(), "performSync").mockResolvedValue(undefined);
+    performSyncSpy = vi.spyOn(useInsightsStore.getState(), "performSync").mockResolvedValue(0);
   });
 
   afterEach(async () => {
