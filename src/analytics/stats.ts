@@ -84,8 +84,15 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
     stats.lastWatched = null;
   }
 
-  // Most watched year
+  // Most watched year & heatmap grid initialization for current year (12 x 31)
   const libraryYearCounts: Record<number, number> = {};
+  const heatmapGrid: Record<string, number> = {};
+  for (let m = 1; m <= 12; m++) {
+    for (let d = 1; d <= 31; d++) {
+      heatmapGrid[`${m}-${d}`] = 0;
+    }
+  }
+  const currentYear = new Date().getFullYear();
 
   library.forEach(item => {
     stats.totalWatchCount += (item.watch_count || 1);
@@ -120,6 +127,18 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
       titleCounts[titleKey] = { count: 0, type: item.type };
     }
     titleCounts[titleKey].count += (item.watch_count || 1);
+
+    const ts = getWatchTime(item);
+    if (ts) {
+      const d = new Date(ts);
+      if (!isNaN(d.getTime())) {
+        if (d.getFullYear() === currentYear) {
+          const month = d.getMonth() + 1;
+          const day = d.getDate();
+          heatmapGrid[`${month}-${day}`] = (heatmapGrid[`${month}-${day}`] || 0) + 1;
+        }
+      }
+    }
   });
 
   let mostWatchedYear = 0;
@@ -172,26 +191,6 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
 
   // Heatmap: Month of year vs Day of month (12 x 31) only for current year
   const heatmap: { month: number; day: number; count: number }[] = [];
-  const heatmapGrid: Record<string, number> = {};
-  for (let m = 1; m <= 12; m++) {
-    for (let d = 1; d <= 31; d++) {
-      heatmapGrid[`${m}-${d}`] = 0;
-    }
-  }
-  const currentYear = new Date().getFullYear();
-  library.forEach(item => {
-    const ts = getWatchTime(item);
-    if (ts) {
-      const d = new Date(ts);
-      if (!isNaN(d.getTime())) {
-        if (d.getFullYear() === currentYear) {
-          const month = d.getMonth() + 1;
-          const day = d.getDate();
-          heatmapGrid[`${month}-${day}`] = (heatmapGrid[`${month}-${day}`] || 0) + 1;
-        }
-      }
-    }
-  });
   Object.entries(heatmapGrid).forEach(([key, count]) => {
     const [month, day] = key.split("-").map(Number);
     heatmap.push({ month, day, count });
