@@ -55,7 +55,7 @@ interface MetadataContext {
   sourceUsed: "cinemeta" | "omdb" | "none";
 }
 
-async function fetchCinemeta(cleanId: string, urlType: "movie" | "series", stats: SyncStats, ctx: MetadataContext): Promise<void> {
+export async function fetchCinemeta(cleanId: string, urlType: "movie" | "series", stats: SyncStats, ctx: MetadataContext): Promise<void> {
   stats.apiCallsCount++;
   try {
     let response = await fetch(`https://v3-cinemeta.strem.io/meta/${urlType}/${cleanId}.json`);
