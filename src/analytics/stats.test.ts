@@ -51,12 +51,26 @@ describe("Analytics & Statistics", () => {
     }
   ];
 
-  it("should calculate correct aggregate totals", () => {
+  it("should calculate correct aggregate totals and average IMDb rating", () => {
     const summary = computeAnalytics(mockEvents);
     expect(summary.totalMovies).toBe(2);
     expect(summary.totalSeries).toBe(1);
     expect(summary.totalWatchCount).toBe(5); // 3 (Dune) + 1 (Superman) + 1 (Alien Earth)
     expect(summary.estimatedWatchTime).toBe(6120000 + 7200000 + 3600000); // sum in ms
+  });
+
+  it("should calculate avgImdbRating correctly", () => {
+    const ratedEvents: PlaybackEvent[] = [
+      { imdb_id: "tt1", title: "Item 1", type: "movie", imdbRating: "8.5" } as PlaybackEvent,
+      { imdb_id: "tt2", title: "Item 2", type: "movie", imdbRating: "7.5" } as PlaybackEvent,
+      { imdb_id: "tt3", title: "Item 3", type: "movie", imdbRating: "invalid" } as PlaybackEvent,
+      { imdb_id: "tt4", title: "Item 4", type: "movie" } as PlaybackEvent,
+    ];
+    const summary = computeAnalytics(ratedEvents);
+    expect(summary.avgImdbRating).toBe("8.0");
+
+    const emptySummary = computeAnalytics([]);
+    expect(emptySummary.avgImdbRating).toBe("0.0");
   });
 
   it("should calculate favorite genres, years, and directors correctly", () => {

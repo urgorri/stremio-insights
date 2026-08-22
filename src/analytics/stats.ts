@@ -52,6 +52,10 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
   const yearCounts: Record<string, number> = {};
   const titleCounts: Record<string, { count: number; type: string }> = {};
 
+  // Accumulate rating statistics during library iteration to avoid array allocations
+  let imdbRatingSum = 0;
+  let ratedItemsCount = 0;
+
   // Find firstRecorded by finding the minimum first watch time
   // And also precompute watch time to optimize sorting
   let sortedDescending: PlaybackEvent[] = [];
@@ -120,6 +124,14 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
       titleCounts[titleKey] = { count: 0, type: item.type };
     }
     titleCounts[titleKey].count += (item.watch_count || 1);
+
+    if (item.imdbRating) {
+      const rating = parseFloat(item.imdbRating);
+      if (!isNaN(rating)) {
+        imdbRatingSum += rating;
+        ratedItemsCount++;
+      }
+    }
   });
 
   let mostWatchedYear = 0;
@@ -152,9 +164,8 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
   const recentlyWatched = sortedDescending.slice(0, 10);
 
   // Average IMDb rating
-  const ratedItems = library.filter(item => item.imdbRating && !isNaN(parseFloat(item.imdbRating)));
-  const avgImdbRating = ratedItems.length > 0
-    ? (ratedItems.reduce((sum, item) => sum + parseFloat(item.imdbRating!), 0) / ratedItems.length).toFixed(1)
+  const avgImdbRating = ratedItemsCount > 0
+    ? (imdbRatingSum / ratedItemsCount).toFixed(1)
     : "0.0";
 
   // Movies watched per month
