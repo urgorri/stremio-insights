@@ -25,7 +25,18 @@ export const OptionsPage: React.FC = () => {
         {/* Footer info */}
         <div className="text-center text-xs text-gray-500 pt-4 space-y-1">
           <p>Stremio Insights is an independent open-source Chrome Extension. All data is stored locally in your browser.</p>
-          <p>Read our 100% local <a href="docs/index.html" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline">Privacy Policy</a>.</p>
+          <p>
+            Read our 100% local{" "}
+            <a
+              href={typeof chrome !== "undefined" && chrome.runtime?.getURL ? chrome.runtime.getURL("docs/index.html") : "docs/index.html"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-purple-400 hover:underline"
+            >
+              Privacy Policy
+            </a>
+            .
+          </p>
         </div>
       </div>
     </div>
