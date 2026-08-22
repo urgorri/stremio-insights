@@ -19,7 +19,8 @@ import {
   Filter,
   CheckCircle,
   AlertCircle,
-  ExternalLink
+  ExternalLink,
+  Maximize2
 } from "lucide-react";
 
 export const Dashboard: React.FC = () => {
@@ -45,37 +46,30 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     fetchData();
 
-    // Auto-sync if running inside extension popup when a Stremio tab is open and active
+    // Auto-sync if running inside extension popup when a Stremio tab is present
     if (isPopup) {
       console.log("[SYNC]\nPopup opened");
       if (typeof chrome !== "undefined" && chrome.tabs) {
         chrome.tabs.query({ url: "https://web.stremio.com/*" }, (tabs) => {
           if (tabs && tabs.length > 0) {
             setIsStremioTabActive(true);
-
-            // Only auto-sync on load if there is an active (focused) Stremio tab
-            const hasActiveTab = tabs.some(tab => tab.active);
-            if (hasActiveTab) {
-              console.log("[SYNC]\nActive Stremio tab is open. Starting on-demand sync...");
-              if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
-                chrome.storage.local.get(["stremio_auth_key"], async (res) => {
-                  const key = res.stremio_auth_key || "";
-                  try {
-                    await performSync(key);
-                  } catch (err: any) {
-                    console.warn("[SYNC] Auto sync on popup load skipped or deferred:", err.message || err);
-                  }
-                });
-              } else {
-                performSync("").catch((err: any) => {
+            console.log("[SYNC]\nStremio tab found. Starting background sync...");
+            if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+              chrome.storage.local.get(["stremio_auth_key"], async (res) => {
+                const key = res.stremio_auth_key || "";
+                try {
+                  await performSync(key);
+                } catch (err: any) {
                   console.warn("[SYNC] Auto sync on popup load skipped or deferred:", err.message || err);
-                });
-              }
+                }
+              });
             } else {
-              console.log("[SYNC]\nStremio tab is in the background. Skipping auto-sync on load to prevent communication failures.");
+              performSync("").catch((err: any) => {
+                console.warn("[SYNC] Auto sync on popup load skipped or deferred:", err.message || err);
+              });
             }
           } else {
-            console.log("[SYNC]\nNo active Stremio tab found.");
+            console.log("[SYNC]\nNo Stremio tab found.");
             setIsStremioTabActive(false);
           }
         });
@@ -209,33 +203,52 @@ export const Dashboard: React.FC = () => {
             Stremio Insights
           </h1>
         </div>
-        {(isStremioTabActive || !isPopup) && (
-          <button
-            onClick={async () => {
-              if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
-                chrome.storage.local.get(["stremio_auth_key"], async (res) => {
-                  const key = res.stremio_auth_key || "";
+        <div className="flex items-center gap-1">
+          {isPopup && (
+            <button
+              onClick={() => {
+                if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.openOptionsPage) {
+                  chrome.runtime.openOptionsPage();
+                } else if (typeof chrome !== "undefined" && chrome.tabs && chrome.tabs.create) {
+                  chrome.tabs.create({ url: chrome.runtime.getURL("options.html") });
+                } else {
+                  window.open("options.html", "_blank");
+                }
+              }}
+              className="p-1.5 hover:bg-gray-800/60 rounded text-gray-400 hover:text-white transition-all flex items-center justify-center"
+              title="Open full page"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </button>
+          )}
+          {(isStremioTabActive || !isPopup) && (
+            <button
+              onClick={async () => {
+                if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+                  chrome.storage.local.get(["stremio_auth_key"], async (res) => {
+                    const key = res.stremio_auth_key || "";
+                    try {
+                      await performSync(key);
+                    } catch (err) {
+                      console.error("[SYNC] Manual sync failed:", err);
+                    }
+                  });
+                } else {
                   try {
-                    await performSync(key);
+                    await performSync("");
                   } catch (err) {
                     console.error("[SYNC] Manual sync failed:", err);
                   }
-                });
-              } else {
-                try {
-                  await performSync("");
-                } catch (err) {
-                  console.error("[SYNC] Manual sync failed:", err);
                 }
-              }
-            }}
-            disabled={syncLoading}
-            className="p-1.5 hover:bg-gray-800/60 rounded text-gray-400 hover:text-white transition-all disabled:opacity-50 flex items-center justify-center"
-            title="Synchronize now"
-          >
-            <RefreshCw className={`w-4 h-4 ${syncLoading ? "animate-spin text-purple-400" : ""}`} />
-          </button>
-        )}
+              }}
+              disabled={syncLoading}
+              className="p-1.5 hover:bg-gray-800/60 rounded text-gray-400 hover:text-white transition-all disabled:opacity-50 flex items-center justify-center"
+              title="Synchronize now"
+            >
+              <RefreshCw className={`w-4 h-4 ${syncLoading ? "animate-spin text-purple-400" : ""}`} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Tabs Menu */}

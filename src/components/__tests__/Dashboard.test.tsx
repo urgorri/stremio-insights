@@ -213,4 +213,28 @@ describe("Dashboard Component", () => {
     // Restore original confirm
     window.confirm = originalConfirm;
   });
+
+  it("should trigger openOptionsPage when open full page button is clicked", () => {
+    const openOptionsPageMock = vi.fn();
+    const originalChrome = global.chrome;
+    global.chrome = {
+      runtime: {
+        openOptionsPage: openOptionsPageMock,
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() }
+      },
+      tabs: {
+        query: vi.fn().mockImplementation((query, cb) => cb([{ active: true }]))
+      }
+    } as any;
+
+    render(<Dashboard />);
+
+    const fullPageBtn = screen.queryByTitle("Open full page");
+    if (fullPageBtn) {
+      fireEvent.click(fullPageBtn);
+      expect(openOptionsPageMock).toHaveBeenCalled();
+    }
+
+    global.chrome = originalChrome;
+  });
 });

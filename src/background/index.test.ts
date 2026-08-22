@@ -398,7 +398,7 @@ describe("Background Service Worker", () => {
       messageListener({ type: "START_SYNC" }, {}, sendResponse);
       await vi.runAllTimersAsync();
 
-      expect(mockTabsUpdate).toHaveBeenCalledWith(401, { active: true });
+      expect(mockTabsSendMessage).toHaveBeenCalledWith(401, { type: "FORCE_RESCAN" }, expect.any(Function));
       expect(sendResponse).toHaveBeenCalledWith({ success: true, count: 42 });
     });
 
