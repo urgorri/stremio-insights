@@ -1,5 +1,9 @@
 # Stremio Insights
 
+[![CI](https://github.com/urgorri/stremio-insights/actions/workflows/ci.yml/badge.svg)](https://github.com/urgorri/stremio-insights/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](https://opensource.org/licenses/MIT)
+[![Version](https://img.shields.io/badge/version-1.0.2-blue.svg)](https://github.com/urgorri/stremio-insights)
+
 Bring a real watch history, analytics, and statistics dashboard to Stremio.
 
 Stremio Insights is an open-source Chrome Extension built with React 19, TypeScript, and Manifest V3 that enhances the `web.stremio.com` experience by providing detailed viewing history, timelines, statistics, background synchronization, full-screen options dashboards, and native export capabilities.
