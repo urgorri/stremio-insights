@@ -7,7 +7,8 @@ import { useInsightsStore } from "../hooks/useInsightsStore";
 import {
   CONTENT_TYPE_MOVIE,
   GENRE_HISTORICAL,
-  RELEASE_YEAR_UNKNOWN
+  RELEASE_YEAR_UNKNOWN,
+  METADATA_CACHE_TTL_MS
 } from "../utils/constants";
 
 console.log("[SYNC] Content Script loaded.");
@@ -478,7 +479,7 @@ export async function runSyncPipeline() {
         const cached = metadataCache[cleanId];
         // Invalidate cache if cached item type is different from the detected/correct type
         const isCacheTypeMismatch = cached?.meta && cached.meta.type && cached.meta.type !== type;
-        const isCacheValid = cached && !isCacheTypeMismatch && (Date.now() - cached.timestamp < 24 * 60 * 60 * 1000);
+        const isCacheValid = cached && !isCacheTypeMismatch && (Date.now() - cached.timestamp < METADATA_CACHE_TTL_MS);
 
         if (isCacheValid && cached?.meta) {
           cacheHitsCount++;
