@@ -3,7 +3,6 @@ import {
   formatBuenosAiresDate,
   normalizeTimestamp,
   mergeWatchHistory,
-  formatDate,
   normalizeReleaseYear,
   formatBuenosAiresDateOnly
 } from "./date";
@@ -53,11 +52,6 @@ describe("Utility Functions - Timestamps and Merging", () => {
     expect(normalizeTimestamp(null)).toBe(0);
     expect(normalizeTimestamp(undefined)).toBe(0);
     expect(normalizeTimestamp("")).toBe(0);
-  });
-
-  it("should format timestamps using formatDate helper", () => {
-    const dateUtc = "2026-07-25T22:31:00.000Z";
-    expect(formatDate(dateUtc)).toBe("25-07-2026 19:31");
   });
 
   it("Case A: should handle merging when the item is a new record", () => {

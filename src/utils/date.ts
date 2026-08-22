@@ -103,13 +103,6 @@ export function mergeWatchHistory(
 }
 
 /**
- * Format date wrapper utilizing the standard America/Argentina/Buenos_Aires timezone logic.
- */
-export function formatDate(timestamp: number | string | Date): string {
-  return formatBuenosAiresDate(timestamp);
-}
-
-/**
  * Normalizes release year string to a 4-digit year or "Unknown".
  * "2005-"      -> "2005"
  * "1999-2007"  -> "1999"
