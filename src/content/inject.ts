@@ -37,3 +37,5 @@ window.fetch = async function (input, init) {
 };
 
 console.log("[Stremio Insights] MAIN world fetch interceptor injected successfully.");
+
+export {};

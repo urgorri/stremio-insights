@@ -44,7 +44,7 @@ describe("useInsightsStore", () => {
       const getMock = vi.fn((keys, callback) => {
         callback({ library: mockLibrary, analytics: mockAnalytics });
       });
-      global.chrome.storage.local.get = getMock;
+      global.chrome.storage.local.get = getMock as any;
 
       const store = useInsightsStore.getState();
       await store.fetchData();
@@ -60,7 +60,7 @@ describe("useInsightsStore", () => {
       const getMock = vi.fn((keys, callback) => {
         callback({});
       });
-      global.chrome.storage.local.get = getMock;
+      global.chrome.storage.local.get = getMock as any;
 
       const store = useInsightsStore.getState();
       await store.fetchData();
@@ -92,7 +92,7 @@ describe("useInsightsStore", () => {
           callback({ success: true });
         }
       });
-      global.chrome.runtime.sendMessage = sendMessageMock;
+      global.chrome.runtime.sendMessage = sendMessageMock as any;
       global.chrome.runtime.lastError = undefined;
 
       // Mock fetchData since performSync calls it
@@ -114,7 +114,7 @@ describe("useInsightsStore", () => {
           callback({ success: false, error: "Test sync error" });
         }
       });
-      global.chrome.runtime.sendMessage = sendMessageMock;
+      global.chrome.runtime.sendMessage = sendMessageMock as any;
       global.chrome.runtime.lastError = undefined;
 
       const store = useInsightsStore.getState();
@@ -131,7 +131,7 @@ describe("useInsightsStore", () => {
           callback();
         }
       });
-      global.chrome.runtime.sendMessage = sendMessageMock;
+      global.chrome.runtime.sendMessage = sendMessageMock as any;
 
       const store = useInsightsStore.getState();
       await expect(store.performSync("test_auth_key")).rejects.toThrow("Runtime error");
@@ -186,7 +186,7 @@ describe("useInsightsStore", () => {
   describe("clearHistory", () => {
     it("should clear history from chrome.storage.local and fetch updated data", async () => {
       const removeMock = vi.fn((keys, callback) => callback());
-      global.chrome.storage.local.remove = removeMock;
+      global.chrome.storage.local.remove = removeMock as any;
 
       const fetchDataSpy = vi.spyOn(useInsightsStore.getState(), "fetchData").mockResolvedValue();
 
