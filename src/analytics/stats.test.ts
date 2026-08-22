@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeAnalytics, groupEventsIntoTimeline } from "./stats";
+import { computeAnalytics, groupEventsIntoTimeline, getFirstWatchTime, getWatchTime } from "./stats";
 import { PlaybackEvent } from "../types";
 
 describe("Analytics & Statistics", () => {
@@ -50,6 +50,83 @@ describe("Analytics & Statistics", () => {
       directors: ["Noah Hawley"]
     }
   ];
+
+  describe("getFirstWatchTime and getWatchTime helper functions", () => {
+    it("getFirstWatchTime should return normalized firstWatched when present", () => {
+      const event = {
+        imdb_id: "tt123",
+        title: "Test Movie",
+        type: "movie",
+        firstWatched: 1700000000000,
+        started_at: "2026-01-01T00:00:00.000Z"
+      } as unknown as PlaybackEvent;
+      expect(getFirstWatchTime(event)).toBe(1700000000000);
+    });
+
+    it("getFirstWatchTime should fall back to normalized started_at when firstWatched is missing", () => {
+      const event = {
+        imdb_id: "tt123",
+        title: "Test Movie",
+        type: "movie",
+        started_at: "2026-01-01T00:00:00.000Z"
+      } as unknown as PlaybackEvent;
+      const expectedTs = new Date("2026-01-01T00:00:00.000Z").getTime();
+      expect(getFirstWatchTime(event)).toBe(expectedTs);
+    });
+
+    it("getFirstWatchTime should return 0 when neither firstWatched nor started_at is provided", () => {
+      const event = {
+        imdb_id: "tt123",
+        title: "Test Movie",
+        type: "movie"
+      } as unknown as PlaybackEvent;
+      expect(getFirstWatchTime(event)).toBe(0);
+    });
+
+    it("getWatchTime should return normalized lastWatched when present", () => {
+      const event = {
+        imdb_id: "tt123",
+        title: "Test Movie",
+        type: "movie",
+        lastWatched: 1750000000000,
+        finished_at: "2026-02-01T00:00:00.000Z",
+        started_at: "2026-01-01T00:00:00.000Z"
+      } as unknown as PlaybackEvent;
+      expect(getWatchTime(event)).toBe(1750000000000);
+    });
+
+    it("getWatchTime should fall back to finished_at when lastWatched is missing", () => {
+      const event = {
+        imdb_id: "tt123",
+        title: "Test Movie",
+        type: "movie",
+        finished_at: "2026-02-01T00:00:00.000Z",
+        started_at: "2026-01-01T00:00:00.000Z"
+      } as unknown as PlaybackEvent;
+      const expectedTs = new Date("2026-02-01T00:00:00.000Z").getTime();
+      expect(getWatchTime(event)).toBe(expectedTs);
+    });
+
+    it("getWatchTime should fall back to started_at when lastWatched and finished_at are missing", () => {
+      const event = {
+        imdb_id: "tt123",
+        title: "Test Movie",
+        type: "movie",
+        started_at: "2026-01-01T00:00:00.000Z"
+      } as unknown as PlaybackEvent;
+      const expectedTs = new Date("2026-01-01T00:00:00.000Z").getTime();
+      expect(getWatchTime(event)).toBe(expectedTs);
+    });
+
+    it("getWatchTime should return 0 when no watch timestamp fields are present", () => {
+      const event = {
+        imdb_id: "tt123",
+        title: "Test Movie",
+        type: "movie"
+      } as unknown as PlaybackEvent;
+      expect(getWatchTime(event)).toBe(0);
+    });
+  });
 
   it("should calculate correct aggregate totals", () => {
     const summary = computeAnalytics(mockEvents);
