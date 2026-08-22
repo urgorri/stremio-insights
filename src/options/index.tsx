@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Dashboard } from "../components/Dashboard";
 import "../index.css";
 
-const OptionsPage: React.FC = () => {
+export const OptionsPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#090a0f] text-white p-6 font-sans">
       <div className="max-w-4xl mx-auto space-y-6">
