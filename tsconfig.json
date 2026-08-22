@@ -20,10 +20,12 @@
     "noUnusedParameters": false,
     "noImplicitReturns": true,
 
+    "types": ["chrome", "node", "vitest/globals"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
     }
   },
-  "include": ["src", "manifest.config.ts", "vite.config.ts"]
+  "include": ["src", "manifest.config.ts", "vite.config.ts"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/analytics/benchmark.ts"]
 }

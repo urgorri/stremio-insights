@@ -50,6 +50,7 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
   const genreCounts: Record<string, number> = {};
   const directorCounts: Record<string, number> = {};
   const yearCounts: Record<string, number> = {};
+  const decadeCounts: Record<string, number> = {};
   const titleCounts: Record<string, { count: number; type: string }> = {};
 
   // Find firstRecorded by finding the minimum first watch time
@@ -98,6 +99,8 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
         const yr = Number(m[0]);
         libraryYearCounts[yr] = (libraryYearCounts[yr] || 0) + 1;
         yearCounts[yr] = (yearCounts[yr] || 0) + 1;
+        const decade = `${Math.floor(yr / 10) * 10}s`;
+        decadeCounts[decade] = (decadeCounts[decade] || 0) + 1;
       }
     }
 
@@ -198,18 +201,6 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
   });
 
   // Top decades
-  const decadeCounts: Record<string, number> = {};
-  library.forEach(item => {
-    const yrStr = item.releaseYear || (item.year ? String(item.year) : "");
-    if (yrStr) {
-      const m = yrStr.match(/\d{4}/);
-      if (m) {
-        const yr = Number(m[0]);
-        const decade = `${Math.floor(yr / 10) * 10}s`;
-        decadeCounts[decade] = (decadeCounts[decade] || 0) + 1;
-      }
-    }
-  });
   const topDecades = Object.entries(decadeCounts)
     .map(([decade, count]) => ({ decade, count }))
     .sort((a, b) => b.count - a.count);
