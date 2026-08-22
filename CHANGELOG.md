@@ -4,6 +4,23 @@ All notable changes to the Stremio Insights extension will be documented in this
 
 ---
 
+## [1.0.2] - 2026-08-22
+
+### Added
+- **Full Page Options Navigation**: Added a dedicated "Open full page" button (`Maximize2`) to the popup extension header bar for instant navigation to full-screen options tab (`options.html`).
+- **Seamless Background Synchronization**: Updated background service worker and extension popup auto-sync so synchronization communicates directly with Stremio in the background without stealing active tab focus or forcing window focus.
+- **Chrome Web Store Release Readiness**: Added automated GitHub Actions CI workflow, expanded unit test suite to 128 tests (94%+ code coverage), and updated Manifest V3 configurations.
+
+---
+
+## [1.0.1] - 2026-08-22
+
+### Added
+- **GitHub Open Source Baseline**: Configured GitHub Actions CI pipeline for automated type checking, builds, and test coverage.
+- **Comprehensive Unit Testing**: Added unit tests for options page, extension popup, content script sync pipeline, OMDb fallbacks, and metadata repairs.
+
+---
+
 ## [1.0.0] - 2026-07-27
 
 ### Added

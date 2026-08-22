@@ -2,7 +2,7 @@
 
 Bring a real watch history, analytics, and statistics dashboard to Stremio.
 
-Stremio Insights is a Chrome Extension built with React, TypeScript, and Manifest V3 that enhances the `web.stremio.com` experience by providing detailed viewing history, timelines, statistics, and export capabilities.
+Stremio Insights is an open-source Chrome Extension built with React 19, TypeScript, and Manifest V3 that enhances the `web.stremio.com` experience by providing detailed viewing history, timelines, statistics, background synchronization, full-screen options dashboards, and native export capabilities.
 
 > Stremio gives you "Continue Watching". Stremio Insights gives you your entire story.
 
@@ -10,36 +10,33 @@ Stremio Insights is a Chrome Extension built with React, TypeScript, and Manifes
 
 ## Features
 
-### Viewing History
+### Viewing History & Badges
 
 * Last watched date and time.
-* Watch count.
-* Viewing progress.
+* Watch count & percentage progress.
 * Movie and TV Series support.
-* IMDb ID detection.
-* Timeline view.
+* IMDb ID detection and Cinemeta / OMDb automatic metadata enrichment.
+* Interactive timeline view.
 
-### Analytics
+### Analytics & Heatmaps
 
-* Total movies watched.
-* Total TV series watched.
+* Total movies & TV series watched.
 * Most watched titles.
-* Activity by month and year.
-* Favorite genres.
-* Favorite directors.
-* Estimated watch time.
+* Activity heatmaps (Month vs. Day).
+* Favorite genres, directors, and release years.
+* Estimated watch time calculations.
 
-### Integration
+### Flexible Interface & Synchronization
 
-* Native integration with `web.stremio.com`.
-* Automatic metadata discovery.
-* DOM observation using `MutationObserver`.
-* IndexedDB persistence.
+* **Full-Screen Options Dashboard**: Instant full-tab view accessible via the extension popup navbar.
+* **On-Demand & Background Sync**: Seamless background synchronization with Stremio without stealing tab focus.
+* **Native Injected Sidebar**: Slidable drawer embedded directly into `web.stremio.com`.
+* **100% Local Privacy**: All watch data stored locally in browser IndexedDB & Chrome Local Storage.
 
 ### Export
 
-* CSV export.
-* JSON export.
+* Native CSV export.
+* Native JSON export.
 
 ---
 
@@ -47,15 +44,15 @@ Stremio Insights is a Chrome Extension built with React, TypeScript, and Manifes
 
 | Category         | Technology                    |
 | ---------------- | ----------------------------- |
-| Language         | TypeScript                    |
+| Language         | TypeScript 5                  |
 | Frontend         | React 19                      |
-| Build Tool       | Vite                          |
+| Build Tool       | Vite + CRXJS                  |
 | Styling          | TailwindCSS                   |
 | State Management | Zustand                       |
-| Storage          | IndexedDB                     |
+| Storage          | Chrome Local Storage / IDB    |
 | Browser APIs     | Chrome Extensions Manifest V3 |
-| Testing          | Vitest + Playwright           |
-| Package Manager  | pnpm                          |
+| Testing          | Vitest + React Testing Library|
+| Package Manager  | npm / pnpm                    |
 
 ---
 
@@ -63,18 +60,15 @@ Stremio Insights is a Chrome Extension built with React, TypeScript, and Manifes
 
 ```txt
 src/
-├── background/
-├── content/
-├── popup/
-├── sidebar/
-├── options/
-├── components/
-├── hooks/
-├── services/
-│   └── stremio/
-├── storage/
-├── types/
-└── utils/
+├── analytics/     # Analytics calculations & heatmaps
+├── background/    # Manifest V3 service worker
+├── components/    # React dashboard components & UI
+├── content/       # Content scripts & fetch interceptors
+├── hooks/         # Zustand store & extension hooks
+├── options/       # Full-screen options page
+├── popup/         # Extension popup entry point
+├── types/         # TypeScript interfaces
+└── utils/         # Date, export & hash utilities
 ```
 
 ---
@@ -84,19 +78,25 @@ src/
 ### Install dependencies
 
 ```bash
-pnpm install
+npm install
 ```
 
 ### Start development mode
 
 ```bash
-pnpm dev
+npm run dev
 ```
 
-### Build extension
+### Run unit tests
 
 ```bash
-pnpm build
+npm test
+```
+
+### Build extension bundle
+
+```bash
+npm run build
 ```
 
 ---
@@ -110,76 +110,11 @@ pnpm build
 
 ---
 
-## Planned Features
+## Release Status & Features
 
-### Version 0.1
-
-* [ ] Last watched badge.
-* [ ] Viewing history.
-* [ ] CSV export.
-
-### Version 0.2
-
-* [ ] Timeline view.
-* [ ] Statistics dashboard.
-* [ ] Search and filters.
-
-### Version 0.3
-
-* [ ] Watch count.
-* [ ] Estimated watch time.
-* [ ] Activity heatmap.
-
-### Version 1.0
-
-* [ ] Chrome Web Store release.
-* [ ] Firefox support.
-* [ ] Optional synchronization.
-
----
-
-## Architecture
-
-```txt
-web.stremio.com
-        ↓
-Content Script
-        ↓
-MutationObserver
-        ↓
-Metadata Parser
-        ↓
-IndexedDB
-        ↓
-Sidebar UI
-        ↓
-Analytics Engine
-```
-
----
-
-## Development Principles
-
-* No external APIs.
-* No backend required.
-* Type-safe codebase.
-* Open source.
-* Privacy first.
-* Local-only data storage.
-
----
-
-## Privacy Policy & GitHub Pages
-
-The official Privacy Policy website for **Stremio Insights** is included directly in this repository under the [`/docs`](docs/index.html) directory.
-
-To host the Privacy Policy on GitHub Pages:
-1. Go to **Settings > Pages** in your GitHub repository.
-2. Select **Source**: `Deploy from a branch`.
-3. Choose branch `main` and folder `/docs`.
-4. Click **Save**.
-
-Your Privacy Policy will be live at `https://<username>.github.io/stremio-insights/`.
+* [x] **v1.0.0**: Native sidebar, DOM badges, IndexedDB storage, stats engine, CSV/JSON export.
+* [x] **v1.0.1**: GitHub Actions CI workflow, Vitest test suite with 94%+ coverage.
+* [x] **v1.0.2**: Chrome Web Store release build, full-screen options button, seamless background tab sync, updated manifest.
 
 ---
 
@@ -191,6 +126,6 @@ MIT
 
 ## Disclaimer
 
-Stremio Insights is an independent project and is not affiliated with, endorsed by, or maintained by the Stremio team.
+Stremio Insights is an independent open-source project and is not affiliated with, endorsed by, or maintained by the Stremio team.
 
 All trademarks belong to their respective owners.

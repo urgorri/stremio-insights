@@ -3,7 +3,7 @@ import { defineManifest } from "@crxjs/vite-plugin";
 export default defineManifest(async (env) => ({
   manifest_version: 3,
   name: "Stremio Insights",
-  version: "1.0.1",
+  version: "1.0.2",
   description: "Complete watch history, analytics, search, and badges for web.stremio.com.",
   permissions: ["storage", "activeTab", "scripting"],
   host_permissions: ["https://web.stremio.com/*"],

@@ -205,10 +205,7 @@ async function handleStartSync(sendResponse: (response: any) => void) {
 
     console.log("[STREMIO]\nSync started");
 
-    // Make sure tab is active before rescan
-    await chrome.tabs.update(tabId, { active: true });
-
-    // Send FORCE_RESCAN with up to 3 retries, exactly matching the store logic but via background channel
+    // Send FORCE_RESCAN via background channel to Stremio tab
     chrome.tabs.sendMessage(tabId, { type: "FORCE_RESCAN" }, (response) => {
       const err = chrome.runtime.lastError;
       if (err) {
