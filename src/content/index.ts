@@ -198,14 +198,25 @@ async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", t
   const cinemetaPromise = fetchCinemeta(cleanId, urlType, stats, ctx);
 
   const omdbPromise = (async () => {
-    const storage = await chrome.storage.local.get(["omdb_api_key"]);
-    const apiKey = storage.omdb_api_key;
-    if (!apiKey) return null;
-    stats.apiCallsCount++;
     try {
-      const omdbResponse = await fetch(`https://www.omdbapi.com/?i=${cleanId}&apikey=${apiKey}`);
-      if (omdbResponse.ok) {
-        return await omdbResponse.json();
+      const response = await new Promise<any>((resolve) => {
+        if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage) {
+          chrome.runtime.sendMessage({ type: "FETCH_OMDB_DATA", cleanId }, (res) => {
+            const err = chrome.runtime.lastError;
+            if (err) {
+              resolve(null);
+            } else {
+              resolve(res);
+            }
+          });
+        } else {
+          resolve(null);
+        }
+      });
+
+      if (response && response.success && response.data) {
+        stats.apiCallsCount++;
+        return response.data;
       }
       return null;
     } catch (omdbErr) {

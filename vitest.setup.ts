@@ -8,6 +8,9 @@ const chromeMock = {
       addListener: vi.fn(),
       removeListener: vi.fn()
     },
+    onInstalled: {
+      addListener: vi.fn()
+    },
     id: "mock-extension-id"
   },
   storage: {

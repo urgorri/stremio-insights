@@ -166,6 +166,33 @@ async function handleFocusTab(sendResponse: (response: any) => void) {
   }
 }
 
+async function handleFetchOmdbData(cleanId: string, sendResponse: (response: any) => void) {
+  try {
+    if (!cleanId || typeof cleanId !== "string") {
+      sendResponse({ success: false, data: null, error: "Invalid cleanId" });
+      return;
+    }
+    const storage = await chrome.storage.local.get(["omdb_api_key"]);
+    const apiKey = storage.omdb_api_key;
+    if (!apiKey) {
+      sendResponse({ success: true, data: null });
+      return;
+    }
+    const sanitizedId = encodeURIComponent(cleanId);
+    const sanitizedApiKey = encodeURIComponent(apiKey);
+    const response = await fetch(`https://www.omdbapi.com/?i=${sanitizedId}&apikey=${sanitizedApiKey}`);
+    if (response.ok) {
+      const data = await response.json();
+      sendResponse({ success: true, data });
+    } else {
+      sendResponse({ success: false, data: null, error: `HTTP error ${response.status}` });
+    }
+  } catch (err: any) {
+    console.warn("[METADATA] OMDb proxy request failed:", err);
+    sendResponse({ success: false, data: null, error: err.message || String(err) });
+  }
+}
+
 async function handleStartSync(sendResponse: (response: any) => void) {
   try {
     const tab = await findStremioTab();
@@ -263,6 +290,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   } else if (message.type === "START_SYNC") {
     handleStartSync(sendResponse);
+    return true;
+  } else if (message.type === "FETCH_OMDB_DATA") {
+    handleFetchOmdbData(message.cleanId, sendResponse);
     return true;
   }
   // For unhandled messages, do not return true to prevent keeping connection ports open indefinitely
