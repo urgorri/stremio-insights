@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/urgorri/stremio-insights/actions/workflows/ci.yml/badge.svg)](https://github.com/urgorri/stremio-insights/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](https://opensource.org/licenses/MIT)
+[![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-green.svg)](https://urgorri.github.io/stremio-insights/)
 [![Version](https://img.shields.io/badge/version-1.0.2-blue.svg)](https://github.com/urgorri/stremio-insights)
 
 Bring a real watch history, analytics, and statistics dashboard to Stremio.
@@ -9,6 +10,14 @@ Bring a real watch history, analytics, and statistics dashboard to Stremio.
 Stremio Insights is an open-source Chrome Extension built with React 19, TypeScript, and Manifest V3 that enhances the `web.stremio.com` experience by providing detailed viewing history, timelines, statistics, background synchronization, full-screen options dashboards, and native export capabilities.
 
 > Stremio gives you "Continue Watching". Stremio Insights gives you your entire story.
+
+---
+
+## Privacy & Data Security
+
+Stremio Insights is designed with a **100% local-first architecture**. All playback history, statistics, and metadata repairs are stored directly inside your browser using IndexedDB and Chrome Local Storage. Your private viewing history is never collected, tracked, or transmitted to any external analytics server.
+
+For complete compliance details, read the official [Stremio Insights Privacy Policy](https://urgorri.github.io/stremio-insights/).
 
 ---
 
