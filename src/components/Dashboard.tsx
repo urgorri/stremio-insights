@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useInsightsStore } from "../hooks/useInsightsStore";
 import { formatBuenosAiresDate, formatBuenosAiresDateOnly, normalizeReleaseYear } from "../utils/date";
 import { groupEventsIntoTimeline } from "../analytics/stats";
+import { HEATMAP_MONTHS, HEATMAP_DAYS } from "../utils/constants";
 import {
   Tv,
   Film,
@@ -611,7 +612,7 @@ export const Dashboard: React.FC = () => {
                 <div className="flex gap-0.5 mb-1 text-[8px] text-gray-500 font-bold">
                   {/* Invisible spacer matching the day label width */}
                   <span className="w-5 shrink-0" />
-                  {Array.from({ length: 12 }).map((_, m) => {
+                  {Array.from({ length: HEATMAP_MONTHS }).map((_, m) => {
                     const monthLabel = String(m + 1).padStart(2, "0");
                     return (
                       <span key={m} className="w-5 text-center shrink-0">{monthLabel}</span>
@@ -620,7 +621,7 @@ export const Dashboard: React.FC = () => {
                 </div>
 
                 {/* 31 Days Rows (Vertical) */}
-                {Array.from({ length: 31 }).map((_, d) => {
+                {Array.from({ length: HEATMAP_DAYS }).map((_, d) => {
                   const dayNum = d + 1;
                   const dayLabel = String(dayNum).padStart(2, "0");
                   return (
@@ -629,7 +630,7 @@ export const Dashboard: React.FC = () => {
                       <span className="w-5 text-[8px] text-gray-400 font-bold shrink-0 text-right pr-1">{dayLabel}</span>
 
                       {/* 12 Months Columns */}
-                      {Array.from({ length: 12 }).map((_, m) => {
+                      {Array.from({ length: HEATMAP_MONTHS }).map((_, m) => {
                         const monthNum = m + 1;
 
                         // Check if this date is valid in the current year

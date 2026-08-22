@@ -1,5 +1,6 @@
 import { PlaybackEvent, WatchStats } from "../types";
 import { normalizeTimestamp } from "../utils/date";
+import { HEATMAP_MONTHS, HEATMAP_DAYS } from "../utils/constants";
 
 export const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -173,8 +174,8 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
   // Heatmap: Month of year vs Day of month (12 x 31) only for current year
   const heatmap: { month: number; day: number; count: number }[] = [];
   const heatmapGrid: Record<string, number> = {};
-  for (let m = 1; m <= 12; m++) {
-    for (let d = 1; d <= 31; d++) {
+  for (let m = 1; m <= HEATMAP_MONTHS; m++) {
+    for (let d = 1; d <= HEATMAP_DAYS; d++) {
       heatmapGrid[`${m}-${d}`] = 0;
     }
   }
