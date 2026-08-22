@@ -260,6 +260,79 @@ async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", t
 let isSyncing = false;
 let lastSyncedHash = "";
 
+let cachedAuthKey = "";
+
+if (typeof window !== "undefined") {
+  window.addEventListener("STREMIO_PROFILE_EXTRACTED", (e: Event) => {
+    const customEvent = e as CustomEvent;
+    const key = customEvent.detail?.authKey;
+    if (key) {
+      cachedAuthKey = key;
+      if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+        try {
+          Promise.resolve(chrome.storage.local.set({ stremio_auth_key: key })).catch(() => {});
+        } catch (e) {
+          // ignore storage errors
+        }
+      }
+    }
+  });
+}
+
+export async function getAuthKey(): Promise<string> {
+  if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+    try {
+      const res = await chrome.storage.local.get(["stremio_auth_key"]);
+      if (res && res.stremio_auth_key) {
+        return res.stremio_auth_key;
+      }
+    } catch (e) {
+      // ignore storage access errors
+    }
+  }
+
+  if (cachedAuthKey) {
+    return cachedAuthKey;
+  }
+
+  return new Promise((resolve) => {
+    let resolved = false;
+
+    const handleExtracted = (e: Event) => {
+      if (resolved) return;
+      resolved = true;
+      window.removeEventListener("STREMIO_PROFILE_EXTRACTED", handleExtracted);
+      const customEvent = e as CustomEvent;
+      const key = customEvent.detail?.authKey || "";
+      if (key) {
+        cachedAuthKey = key;
+        if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+          try {
+            Promise.resolve(chrome.storage.local.set({ stremio_auth_key: key })).catch(() => {});
+          } catch (e) {
+            // ignore storage errors
+          }
+        }
+      }
+      resolve(key);
+    };
+
+    window.addEventListener("STREMIO_PROFILE_EXTRACTED", handleExtracted);
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("REQUEST_STREMIO_PROFILE"));
+    }
+
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        window.removeEventListener("STREMIO_PROFILE_EXTRACTED", handleExtracted);
+        resolve(cachedAuthKey || "");
+      }
+    }, 500);
+  });
+}
+
 export async function runSyncPipeline() {
   if (isSyncing) return;
   isSyncing = true;
@@ -270,20 +343,7 @@ export async function runSyncPipeline() {
     const currentHash = window.location.hash || "";
     console.log("[SYNC]\nroute=#/continuewatching");
 
-    const profileStr = localStorage.getItem("profile");
-    if (!profileStr) {
-      console.warn("[SYNC] No Stremio profile found in localStorage.");
-      return;
-    }
-
-    let authKey = "";
-    try {
-      const profile = JSON.parse(profileStr);
-      authKey = profile?.auth?.key || "";
-    } catch (e) {
-      console.error("[SYNC] Error parsing profile JSON:", e);
-      return;
-    }
+    const authKey = await getAuthKey();
 
     if (!authKey) {
       console.warn("[SYNC] No authKey found in Stremio profile.");

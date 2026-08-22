@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { needsRepair } from "./index";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { needsRepair, getAuthKey } from "./index";
 import { CONTENT_TYPE_MOVIE, CONTENT_TYPE_SERIES, GENRE_HISTORICAL, RELEASE_YEAR_UNKNOWN } from "../utils/constants";
 
 describe("needsRepair", () => {
@@ -85,5 +85,42 @@ describe("needsRepair", () => {
         expect(needsRepair(item)).toBe(true);
       });
     });
+  });
+});
+
+describe("getAuthKey", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should return authKey from chrome.storage.local if available", async () => {
+    (chrome.storage.local.get as any).mockImplementation((keys: any, cb?: any) => {
+      const data = { stremio_auth_key: "stored-key-123" };
+      if (typeof cb === "function") cb(data);
+      return Promise.resolve(data);
+    });
+
+    const key = await getAuthKey();
+    expect(key).toBe("stored-key-123");
+  });
+
+  it("should request profile via custom event bridge if not in chrome.storage.local", async () => {
+    (chrome.storage.local.get as any).mockImplementation((keys: any, cb?: any) => {
+      const data = {};
+      if (typeof cb === "function") cb(data);
+      return Promise.resolve(data);
+    });
+
+    const listenPromise = getAuthKey();
+
+    // Simulate event bridge response
+    window.dispatchEvent(
+      new CustomEvent("STREMIO_PROFILE_EXTRACTED", {
+        detail: { authKey: "bridge-key-789" }
+      })
+    );
+
+    const key = await listenPromise;
+    expect(key).toBe("bridge-key-789");
   });
 });

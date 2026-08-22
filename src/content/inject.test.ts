@@ -27,6 +27,7 @@ describe("window.fetch interceptor", () => {
 
   async function injectInterceptor() {
     await import("./inject.ts");
+    dispatchEventSpy.mockClear();
   }
 
   it("should inject successfully and override window.fetch", async () => {
@@ -144,5 +145,60 @@ describe("window.fetch interceptor", () => {
     expect(consoleErrorSpy).toHaveBeenCalledWith("[Stremio Insights] Error intercepting fetch:", expect.any(Error));
     expect(originalFetch).toHaveBeenCalledWith("https://api.strem.io/api/datastorePut", expect.any(Object));
     expect(response).toBe(mockResponse);
+  });
+});
+
+describe("profile extraction and event bridge", () => {
+  let dispatchEventSpy: any;
+
+  beforeEach(() => {
+    dispatchEventSpy = vi.spyOn(window, "dispatchEvent");
+    localStorage.clear();
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("should extract authKey from localStorage and dispatch STREMIO_PROFILE_EXTRACTED on load", async () => {
+    localStorage.setItem("profile", JSON.stringify({ auth: { key: "secret-auth-key-123" } }));
+
+    await import("./inject.ts");
+
+    expect(dispatchEventSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "STREMIO_PROFILE_EXTRACTED",
+        detail: { authKey: "secret-auth-key-123" }
+      })
+    );
+  });
+
+  it("should handle REQUEST_STREMIO_PROFILE custom event and dispatch STREMIO_PROFILE_EXTRACTED", async () => {
+    localStorage.setItem("profile", JSON.stringify({ auth: { key: "requested-auth-key-456" } }));
+
+    await import("./inject.ts");
+
+    dispatchEventSpy.mockClear();
+
+    window.dispatchEvent(new CustomEvent("REQUEST_STREMIO_PROFILE"));
+
+    expect(dispatchEventSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "STREMIO_PROFILE_EXTRACTED",
+        detail: { authKey: "requested-auth-key-456" }
+      })
+    );
+  });
+
+  it("should dispatch empty authKey if profile is missing in localStorage", async () => {
+    await import("./inject.ts");
+
+    expect(dispatchEventSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "STREMIO_PROFILE_EXTRACTED",
+        detail: { authKey: "" }
+      })
+    );
   });
 });

@@ -36,4 +36,41 @@ window.fetch = async function (input, init) {
   return originalFetch.apply(this, [input, init]);
 };
 
+function extractAndDispatchProfile() {
+  try {
+    const profileStr = localStorage.getItem("profile");
+    if (profileStr) {
+      const profile = JSON.parse(profileStr);
+      const authKey = profile?.auth?.key || "";
+      window.dispatchEvent(
+        new CustomEvent("STREMIO_PROFILE_EXTRACTED", {
+          detail: { authKey }
+        })
+      );
+    } else {
+      window.dispatchEvent(
+        new CustomEvent("STREMIO_PROFILE_EXTRACTED", {
+          detail: { authKey: "" }
+        })
+      );
+    }
+  } catch (e) {
+    console.error("[Stremio Insights] Error extracting profile in MAIN world:", e);
+    window.dispatchEvent(
+      new CustomEvent("STREMIO_PROFILE_EXTRACTED", {
+        detail: { authKey: "" }
+      })
+    );
+  }
+}
+
+window.addEventListener("REQUEST_STREMIO_PROFILE", () => {
+  extractAndDispatchProfile();
+});
+
+// Also initial extraction on load
+extractAndDispatchProfile();
+
 console.log("[Stremio Insights] MAIN world fetch interceptor injected successfully.");
+
+export {};
