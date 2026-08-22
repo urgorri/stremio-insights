@@ -11,6 +11,11 @@ All notable changes to the Stremio Insights extension will be documented in this
 - **Seamless Background Synchronization**: Updated background service worker and extension popup auto-sync so synchronization communicates directly with Stremio in the background without stealing active tab focus or forcing window focus.
 - **Chrome Web Store Release Readiness**: Added automated GitHub Actions CI workflow, expanded unit test suite to 128 tests (94%+ code coverage), and updated Manifest V3 configurations.
 
+### Security & Maintenance
+- **Dependency Audit & Vulnerability Remediation**: Resolved all security vulnerabilities (0 remaining) by upgrading `happy-dom` to `^20.0.0`, `vite` to `^6.4.3` (updating `esbuild` to `0.25.12`), and `vitest` with `@vitest/coverage-v8` to `^4.1.11`.
+- **Deprecation Warning Resolution**: Upgraded `recharts` to `^3.0.0` and eliminated legacy `glob@10.5.0` dependency paths to clear all npm deprecation warnings.
+- **Script Security Approvals**: Approved `esbuild` script execution rules in `package.json` to resolve npm `allow-scripts` warnings.
+
 ---
 
 ## [1.0.1] - 2026-08-22
