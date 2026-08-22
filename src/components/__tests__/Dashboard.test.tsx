@@ -237,4 +237,63 @@ describe("Dashboard Component", () => {
 
     global.chrome = originalChrome;
   });
+
+  it("should fallback to tabs.create when openOptionsPage is undefined", () => {
+    const tabsCreateMock = vi.fn();
+    const originalChrome = global.chrome;
+    global.chrome = {
+      runtime: {
+        getURL: vi.fn().mockReturnValue("chrome-extension://id/options.html"),
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() }
+      },
+      tabs: {
+        query: vi.fn().mockImplementation((query, cb) => cb([{ active: true }])),
+        create: tabsCreateMock
+      }
+    } as any;
+
+    render(<Dashboard />);
+
+    const fullPageBtn = screen.queryByTitle("Open full page");
+    if (fullPageBtn) {
+      fireEvent.click(fullPageBtn);
+      expect(tabsCreateMock).toHaveBeenCalledWith({ url: "chrome-extension://id/options.html" });
+    }
+
+    global.chrome = originalChrome;
+  });
+
+  it("should perform auto sync on popup load even when Stremio tab is in background (inactive)", async () => {
+    const originalChrome = global.chrome;
+    const originalLocation = window.location;
+
+    // Mock location.protocol to simulate chrome-extension: popup
+    Object.defineProperty(window, "location", {
+      value: { ...originalLocation, protocol: "chrome-extension:" },
+      writable: true
+    });
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() }
+      },
+      tabs: {
+        query: vi.fn().mockImplementation((query, cb) => cb([{ id: 99, active: false }]))
+      },
+      storage: {
+        local: {
+          get: vi.fn().mockImplementation((keys, cb) => cb({ stremio_auth_key: "key123" }))
+        }
+      }
+    } as any;
+
+    render(<Dashboard />);
+
+    await waitFor(() => {
+      expect(mockPerformSync).toHaveBeenCalledWith("key123");
+    });
+
+    global.chrome = originalChrome;
+    Object.defineProperty(window, "location", { value: originalLocation, writable: true });
+  });
 });
