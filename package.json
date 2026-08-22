@@ -3,6 +3,26 @@
   "version": "1.0.2",
   "description": "Chrome Extension for web.stremio.com watch history and analytics",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/urgorri/stremio-insights.git"
+  },
+  "keywords": [
+    "stremio",
+    "stremio-extension",
+    "chrome-extension",
+    "watch-history",
+    "analytics",
+    "dashboard",
+    "manifest-v3",
+    "react"
+  ],
+  "author": "Gastón Urgorri",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/urgorri/stremio-insights/issues"
+  },
+  "homepage": "https://github.com/urgorri/stremio-insights#readme",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
