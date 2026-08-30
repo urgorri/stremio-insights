@@ -378,6 +378,59 @@ describe("runSyncPipeline", () => {
       })
     );
   });
+
+  it("should handle Cinemeta fetch rejection and log console warning", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    localStorage.setItem("profile", JSON.stringify({ auth: { key: "test_key" } }));
+
+    const networkError = new Error("Network error connecting to Cinemeta");
+
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("datastoreMeta")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            result: [
+              ["tt0133093", 1650000000000]
+            ]
+          })
+        });
+      }
+      if (url.includes("datastoreGet")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            result: [
+              { _id: "tt0133093", name: "The Matrix", type: "movie" }
+            ]
+          })
+        });
+      }
+      if (url.includes("feed.json")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([])
+        });
+      }
+      if (url.includes("v3-cinemeta.strem.io")) {
+        return Promise.reject(networkError);
+      }
+      if (url.includes("omdbapi.com")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ Response: "False" })
+        });
+      }
+      return Promise.resolve({ ok: false });
+    });
+
+    await runSyncPipeline();
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[METADATA] Cinemeta failed for tt0133093:",
+      networkError
+    );
+  });
 });
 
 describe("Content Script Chrome Message Listener", () => {
