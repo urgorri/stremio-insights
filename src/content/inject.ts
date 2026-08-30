@@ -19,13 +19,15 @@ window.fetch = async function (input, init) {
       const clone = response.clone();
       const responseData = await clone.json();
 
-      // Dispatch a custom event to communicate with the ISOLATED content script
-      window.dispatchEvent(new CustomEvent("STREMIO_DATASTORE_PUT_INTERCEPTED", {
-        detail: {
-          request: bodyData,
-          response: responseData
-        }
-      }));
+      // Use a MessageChannel to securely communicate with the ISOLATED content script
+      // without broadcasting sensitive payload data to the global window context.
+      const channel = new MessageChannel();
+      window.postMessage({ type: "STREMIO_DATASTORE_PUT_INTERCEPTED" }, "*", [channel.port2]);
+
+      channel.port1.postMessage({
+        request: bodyData,
+        response: responseData
+      });
 
       return response;
     } catch (e) {

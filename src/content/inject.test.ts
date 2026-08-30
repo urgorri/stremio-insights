@@ -2,8 +2,10 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 describe("window.fetch interceptor", () => {
   let originalFetch: typeof window.fetch;
-  let dispatchEventSpy: any;
+  let postMessageSpy: any;
   let consoleErrorSpy: any;
+  let mockPort1: { postMessage: any };
+  let mockPort2: {};
 
   beforeEach(() => {
     // Setup initial state before module import or execution
@@ -14,8 +16,18 @@ describe("window.fetch interceptor", () => {
     });
     window.fetch = originalFetch;
 
-    dispatchEventSpy = vi.spyOn(window, "dispatchEvent");
+    postMessageSpy = vi.spyOn(window, "postMessage").mockImplementation(() => {});
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    mockPort1 = { postMessage: vi.fn() };
+    mockPort2 = {};
+
+    class MockMessageChannel {
+      port1 = mockPort1;
+      port2 = mockPort2;
+    }
+
+    vi.stubGlobal("MessageChannel", MockMessageChannel);
 
     // Clear module cache to re-execute inject.ts side-effects (window.fetch override)
     vi.resetModules();
@@ -23,6 +35,7 @@ describe("window.fetch interceptor", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   async function injectInterceptor() {
@@ -43,10 +56,10 @@ describe("window.fetch interceptor", () => {
 
     expect(originalFetch).toHaveBeenCalledWith("https://api.example.com/data", undefined);
     expect(response).toBe(mockResponse);
-    expect(dispatchEventSpy).not.toHaveBeenCalled();
+    expect(postMessageSpy).not.toHaveBeenCalled();
   });
 
-  it("should intercept datastorePut requests and dispatch CustomEvent with parsed body", async () => {
+  it("should intercept datastorePut requests and use MessageChannel to transmit sensitive data securely", async () => {
     await injectInterceptor();
 
     const requestBody = { id: 123, action: "update" };
@@ -66,15 +79,19 @@ describe("window.fetch interceptor", () => {
 
     expect(originalFetch).toHaveBeenCalledWith("https://api.strem.io/api/datastorePut", expect.any(Object));
     expect(response).toBe(mockResponse);
-    expect(dispatchEventSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "STREMIO_DATASTORE_PUT_INTERCEPTED",
-        detail: {
-          request: requestBody,
-          response: mockJson
-        }
-      })
+
+    // Ensure window.postMessage was used ONLY to transfer the MessagePort (port2) and not the sensitive data payload
+    expect(postMessageSpy).toHaveBeenCalledWith(
+      { type: "STREMIO_DATASTORE_PUT_INTERCEPTED" },
+      "*",
+      [mockPort2]
     );
+
+    // Ensure sensitive data (request body and response data) is posted through port1 privately
+    expect(mockPort1.postMessage).toHaveBeenCalledWith({
+      request: requestBody,
+      response: mockJson
+    });
   });
 
   it("should handle Request object inputs instead of string urls", async () => {
@@ -94,11 +111,15 @@ describe("window.fetch interceptor", () => {
     await window.fetch(request);
 
     expect(originalFetch).toHaveBeenCalledWith(request, undefined);
-    expect(dispatchEventSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "STREMIO_DATASTORE_PUT_INTERCEPTED"
-      })
+    expect(postMessageSpy).toHaveBeenCalledWith(
+      { type: "STREMIO_DATASTORE_PUT_INTERCEPTED" },
+      "*",
+      [mockPort2]
     );
+    expect(mockPort1.postMessage).toHaveBeenCalledWith({
+      request: {},
+      response: mockJson
+    });
   });
 
   it("should handle body not being a string safely", async () => {
@@ -116,14 +137,15 @@ describe("window.fetch interceptor", () => {
       body: bodyObj as any
     });
 
-    expect(dispatchEventSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "STREMIO_DATASTORE_PUT_INTERCEPTED",
-        detail: expect.objectContaining({
-          request: {} // defaults to empty object
-        })
-      })
+    expect(postMessageSpy).toHaveBeenCalledWith(
+      { type: "STREMIO_DATASTORE_PUT_INTERCEPTED" },
+      "*",
+      [mockPort2]
     );
+    expect(mockPort1.postMessage).toHaveBeenCalledWith({
+      request: {},
+      response: {}
+    });
   });
 
   it("should catch errors in interceptor and fallback to original request silently (logged to console)", async () => {
