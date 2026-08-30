@@ -296,4 +296,82 @@ describe("Dashboard Component", () => {
     global.chrome = originalChrome;
     Object.defineProperty(window, "location", { value: originalLocation, writable: true });
   });
+
+  it("should handle error gracefully when performSync rejects during auto-sync with chrome.storage.local present", async () => {
+    const originalChrome = global.chrome;
+    const originalLocation = window.location;
+    const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    mockPerformSync.mockRejectedValueOnce(new Error("Network timeout during sync"));
+
+    Object.defineProperty(window, "location", {
+      value: { ...originalLocation, protocol: "chrome-extension:" },
+      writable: true
+    });
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() }
+      },
+      tabs: {
+        query: vi.fn().mockImplementation((query, cb) => cb([{ id: 101, active: true }]))
+      },
+      storage: {
+        local: {
+          get: vi.fn().mockImplementation((keys, cb) => cb({ stremio_auth_key: "key-error" }))
+        }
+      }
+    } as any;
+
+    render(<Dashboard />);
+
+    await waitFor(() => {
+      expect(mockPerformSync).toHaveBeenCalledWith("key-error");
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        "[SYNC] Auto sync on popup load skipped or deferred:",
+        "Network timeout during sync"
+      );
+    });
+
+    consoleWarnSpy.mockRestore();
+    global.chrome = originalChrome;
+    Object.defineProperty(window, "location", { value: originalLocation, writable: true });
+  });
+
+  it("should handle error gracefully when performSync rejects during auto-sync without chrome.storage available", async () => {
+    const originalChrome = global.chrome;
+    const originalLocation = window.location;
+    const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    mockPerformSync.mockRejectedValueOnce(new Error("Sync fallback failure"));
+
+    Object.defineProperty(window, "location", {
+      value: { ...originalLocation, protocol: "chrome-extension:" },
+      writable: true
+    });
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() }
+      },
+      tabs: {
+        query: vi.fn().mockImplementation((query, cb) => cb([{ id: 102, active: true }]))
+      }
+      // chrome.storage intentionally omitted
+    } as any;
+
+    render(<Dashboard />);
+
+    await waitFor(() => {
+      expect(mockPerformSync).toHaveBeenCalledWith("");
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        "[SYNC] Auto sync on popup load skipped or deferred:",
+        "Sync fallback failure"
+      );
+    });
+
+    consoleWarnSpy.mockRestore();
+    global.chrome = originalChrome;
+    Object.defineProperty(window, "location", { value: originalLocation, writable: true });
+  });
 });
