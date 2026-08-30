@@ -58,15 +58,18 @@ interface MetadataContext {
 async function fetchCinemeta(cleanId: string, urlType: "movie" | "series", stats: SyncStats, ctx: MetadataContext): Promise<void> {
   stats.apiCallsCount++;
   try {
-    let response = await fetch(`https://v3-cinemeta.strem.io/meta/${urlType}/${cleanId}.json`);
+    const encodedType = encodeURIComponent(urlType);
+    const encodedId = encodeURIComponent(cleanId);
+    let response = await fetch(`https://v3-cinemeta.strem.io/meta/${encodedType}/${encodedId}.json`);
     let data = response.ok ? await response.json() : null;
     let meta = data && data.meta;
 
     if (!meta) {
       const fallbackType = urlType === "series" ? "movie" : "series";
+      const encodedFallbackType = encodeURIComponent(fallbackType);
       console.log(`[SYNC] Cinemeta ${urlType} failed for ${cleanId}, trying fallback type ${fallbackType}`);
       stats.apiCallsCount++;
-      const fallbackResponse = await fetch(`https://v3-cinemeta.strem.io/meta/${fallbackType}/${cleanId}.json`);
+      const fallbackResponse = await fetch(`https://v3-cinemeta.strem.io/meta/${encodedFallbackType}/${encodedId}.json`);
       if (fallbackResponse.ok) {
         data = await fallbackResponse.json();
         meta = data && data.meta;
@@ -203,7 +206,7 @@ async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", t
     if (!apiKey) return null;
     stats.apiCallsCount++;
     try {
-      const omdbResponse = await fetch(`https://www.omdbapi.com/?i=${cleanId}&apikey=${apiKey}`);
+      const omdbResponse = await fetch(`https://www.omdbapi.com/?i=${encodeURIComponent(cleanId)}&apikey=${encodeURIComponent(apiKey)}`);
       if (omdbResponse.ok) {
         return await omdbResponse.json();
       }

@@ -378,6 +378,51 @@ describe("runSyncPipeline", () => {
       })
     );
   });
+
+  it("should encode dynamic parameters in fetch URLs to prevent SSRF and path traversal", async () => {
+    localStorage.setItem("profile", JSON.stringify({ auth: { key: "test_key" } }));
+
+    const fetchedUrls: string[] = [];
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      fetchedUrls.push(url);
+      if (url.includes("datastoreMeta")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            result: [
+              ["tt12345/../secret", 1600000000000]
+            ]
+          })
+        });
+      }
+      if (url.includes("datastoreGet")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ result: [] })
+        });
+      }
+      if (url.includes("feed.json")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([])
+        });
+      }
+      return Promise.resolve({ ok: false });
+    });
+
+    await runSyncPipeline();
+
+    // Check Cinemeta URL encoding for cleanId containing traversal 'tt12345/../secret'
+    const cinemetaCall = fetchedUrls.find(u => u.includes("v3-cinemeta.strem.io"));
+    expect(cinemetaCall).toBeDefined();
+    expect(cinemetaCall).toContain("tt12345%2F..%2Fsecret");
+
+    // Check OMDb URL encoding for cleanId and apiKey
+    const omdbCall = fetchedUrls.find(u => u.includes("omdbapi.com"));
+    expect(omdbCall).toBeDefined();
+    expect(omdbCall).toContain("i=tt12345%2F..%2Fsecret");
+    expect(omdbCall).toContain("apikey=test_omdb_key");
+  });
 });
 
 describe("Content Script Chrome Message Listener", () => {
