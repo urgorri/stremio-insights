@@ -26,6 +26,9 @@ export function convertToCSV(events: PlaybackEvent[]): string {
   const escapeCSV = (val: any) => {
     if (val === undefined || val === null) return "";
     let str = String(val);
+    if (/^[=+\-@\t\r]/.test(str)) {
+      str = "'" + str;
+    }
     if (str.includes(",") || str.includes("\"") || str.includes("\n") || str.includes("\r")) {
       str = "\"" + str.replace(/"/g, "\"\"") + "\"";
     }
