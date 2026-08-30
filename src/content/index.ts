@@ -140,7 +140,7 @@ function applyOmdbFallback(omdbData: any, ctx: MetadataContext): void {
   }
 }
 
-async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", title: string, stats: SyncStats): Promise<any> {
+async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", title: string, stats: SyncStats, omdbApiKey?: string): Promise<any> {
   const cleanId = imdbId.split(":")[0];
   const urlType = type === "series" ? "series" : "movie";
 
@@ -198,8 +198,7 @@ async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", t
   const cinemetaPromise = fetchCinemeta(cleanId, urlType, stats, ctx);
 
   const omdbPromise = (async () => {
-    const storage = await chrome.storage.local.get(["omdb_api_key"]);
-    const apiKey = storage.omdb_api_key;
+    const apiKey = omdbApiKey;
     if (!apiKey) return null;
     stats.apiCallsCount++;
     try {
@@ -421,8 +420,9 @@ export async function runSyncPipeline() {
     }
 
     // Get existing storage for merging & repair rules
-    const storage = await chrome.storage.local.get(["library", "metadata_cache"]);
+    const storage = await chrome.storage.local.get(["library", "metadata_cache", "omdb_api_key"]);
     const existingLibrary = Array.isArray(storage.library) ? storage.library : [];
+    const omdbApiKey = storage.omdb_api_key;
     const existingMap = new Map<string, any>();
     existingLibrary.forEach(item => {
       if (item && item.imdbId) {
@@ -499,7 +499,7 @@ export async function runSyncPipeline() {
 
         const title = getMeta?.name || `Unknown (${imdbId})`;
         try {
-          const meta = await fetchEnrichedMetadata(imdbId, type, title, stats);
+          const meta = await fetchEnrichedMetadata(imdbId, type, title, stats, omdbApiKey);
           // Only cache if the fetched metadata has some actual content (e.g., is not empty/failed)
           const isFailedFetch = !meta || ((meta.genres || []).length === 1 && meta.genres[0] === "Historical" && !meta.director && meta.releaseYear === "Unknown");
           if (meta && !isFailedFetch) {
