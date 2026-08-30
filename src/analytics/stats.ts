@@ -32,66 +32,55 @@ export interface AnalyticsSummary extends WatchStats {
 }
 
 export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
-  const movies = library.filter(item => item.type === "movie");
-  const series = library.filter(item => item.type === "series");
-
-  // Basic WatchStats fields
-  const stats: WatchStats = {
-    totalMovies: movies.length,
-    totalSeries: series.length,
-    totalWatchCount: 0,
-    estimatedWatchTime: 0,
-    favoriteGenres: [],
-    favoriteYears: [],
-    favoriteDirectors: [],
-    lastWatched: null,
-    firstRecorded: null,
-  };
+  let totalMovies = 0;
+  let totalSeries = 0;
+  let totalWatchCount = 0;
+  let estimatedWatchTime = 0;
+  let ratedSum = 0;
+  let ratedCount = 0;
 
   const genreCounts: Record<string, number> = {};
   const directorCounts: Record<string, number> = {};
   const yearCounts: Record<string, number> = {};
   const decadeCounts: Record<string, number> = {};
+  const libraryYearCounts: Record<number, number> = {};
   const titleCounts: Record<string, { count: number; type: string }> = {};
+  const moviesPerMonth: Record<string, number> = {};
 
-  // Find firstRecorded by finding the minimum first watch time
-  // And also precompute watch time to optimize sorting
-  let sortedDescending: PlaybackEvent[] = [];
-
-  if (library.length > 0) {
-    let minItem = library[0];
-    let minTime = getFirstWatchTime(minItem);
-
-    const enriched = new Array(library.length);
-    enriched[0] = { item: library[0], watchTime: getWatchTime(library[0]) };
-
-    for (let i = 1; i < library.length; i++) {
-      const item = library[i];
-      const currFirstTime = getFirstWatchTime(item);
-      if (currFirstTime < minTime) {
-        minTime = currFirstTime;
-        minItem = item;
-      }
-      enriched[i] = { item, watchTime: getWatchTime(item) };
+  const heatmapGrid: Record<string, number> = {};
+  for (let m = 1; m <= HEATMAP_MONTHS_COUNT; m++) {
+    for (let d = 1; d <= HEATMAP_DAYS_COUNT; d++) {
+      heatmapGrid[`${m}-${d}`] = 0;
     }
-
-    stats.firstRecorded = minItem;
-
-    // Sort by precomputed watch time to find lastWatched
-    enriched.sort((a, b) => b.watchTime - a.watchTime);
-    sortedDescending = enriched.map(x => x.item);
-    stats.lastWatched = sortedDescending[0] || null;
-  } else {
-    stats.firstRecorded = null;
-    stats.lastWatched = null;
   }
 
-  // Most watched year
-  const libraryYearCounts: Record<number, number> = {};
+  const currentYear = new Date().getFullYear();
+  const len = library.length;
+  const enriched: { item: PlaybackEvent; watchTime: number; date: Date | null; dateValid: boolean }[] = new Array(len);
 
-  library.forEach(item => {
-    stats.totalWatchCount += (item.watch_count || 1);
-    stats.estimatedWatchTime += (item.time_watched || 0);
+  let minItem: PlaybackEvent | null = null;
+  let minTime = Infinity;
+
+  for (let i = 0; i < len; i++) {
+    const item = library[i];
+
+    if (item.type === "movie") {
+      totalMovies++;
+    } else if (item.type === "series") {
+      totalSeries++;
+    }
+
+    const watchCount = item.watch_count || 1;
+    totalWatchCount += watchCount;
+    estimatedWatchTime += (item.time_watched || 0);
+
+    if (item.imdbRating) {
+      const rating = parseFloat(item.imdbRating);
+      if (!isNaN(rating)) {
+        ratedSum += rating;
+        ratedCount++;
+      }
+    }
 
     const yrStr = item.releaseYear || (item.year ? String(item.year) : "");
     if (yrStr) {
@@ -106,25 +95,74 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
     }
 
     if (item.genres) {
-      item.genres.forEach(g => {
+      for (let j = 0; j < item.genres.length; j++) {
+        const g = item.genres[j];
         genreCounts[g] = (genreCounts[g] || 0) + 1;
-      });
+      }
     }
 
     if (item.directors && item.directors.length > 0) {
-      item.directors.forEach(d => {
+      for (let j = 0; j < item.directors.length; j++) {
+        const d = item.directors[j];
         directorCounts[d] = (directorCounts[d] || 0) + 1;
-      });
+      }
     } else if (item.director) {
       directorCounts[item.director] = (directorCounts[item.director] || 0) + 1;
     }
 
     const titleKey = item.title;
-    if (!titleCounts[titleKey]) {
-      titleCounts[titleKey] = { count: 0, type: item.type };
+    const existingTitle = titleCounts[titleKey];
+    if (existingTitle) {
+      existingTitle.count += watchCount;
+    } else {
+      titleCounts[titleKey] = { count: watchCount, type: item.type };
     }
-    titleCounts[titleKey].count += (item.watch_count || 1);
-  });
+
+    const currFirstTime = getFirstWatchTime(item);
+    if (currFirstTime < minTime) {
+      minTime = currFirstTime;
+      minItem = item;
+    }
+
+    const watchTime = getWatchTime(item);
+    let date: Date | null = null;
+    let dateValid = false;
+    if (watchTime) {
+      const d = new Date(watchTime);
+      if (!isNaN(d.getTime())) {
+        date = d;
+        dateValid = true;
+
+        if (item.type === "movie") {
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+          moviesPerMonth[key] = (moviesPerMonth[key] || 0) + 1;
+        }
+
+        if (d.getFullYear() === currentYear) {
+          const month = d.getMonth() + 1;
+          const day = d.getDate();
+          heatmapGrid[`${month}-${day}`] = (heatmapGrid[`${month}-${day}`] || 0) + 1;
+        }
+      }
+    }
+
+    enriched[i] = { item, watchTime, date, dateValid };
+  }
+
+  // Sort enriched by precomputed watchTime descending
+  enriched.sort((a, b) => b.watchTime - a.watchTime);
+
+  const stats: WatchStats = {
+    totalMovies,
+    totalSeries,
+    totalWatchCount,
+    estimatedWatchTime,
+    favoriteGenres: [],
+    favoriteYears: [],
+    favoriteDirectors: [],
+    lastWatched: len > 0 ? enriched[0].item : null,
+    firstRecorded: len > 0 ? minItem : null,
+  };
 
   let mostWatchedYear = 0;
   let maxYearCount = 0;
@@ -135,78 +173,34 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
     }
   });
 
-  // Timeline (using watch time)
   const timeline: Record<string, PlaybackEvent[]> = {};
-  sortedDescending
-    .forEach(item => {
-      const ts = getWatchTime(item);
-      if (ts) {
-        const d = new Date(ts);
-        if (!isNaN(d.getTime())) {
-          const monthYear = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-          if (!timeline[monthYear]) {
-            timeline[monthYear] = [];
-          }
-          timeline[monthYear].push(item);
-        }
+  for (let i = 0; i < len; i++) {
+    const entry = enriched[i];
+    if (entry.dateValid && entry.date) {
+      const monthYear = `${MONTHS[entry.date.getMonth()]} ${entry.date.getFullYear()}`;
+      if (!timeline[monthYear]) {
+        timeline[monthYear] = [];
       }
-    });
-
-  // Recently watched
-  const recentlyWatched = sortedDescending.slice(0, 10);
-
-  // Average IMDb rating
-  const ratedItems = library.filter(item => item.imdbRating && !isNaN(parseFloat(item.imdbRating)));
-  const avgImdbRating = ratedItems.length > 0
-    ? (ratedItems.reduce((sum, item) => sum + parseFloat(item.imdbRating!), 0) / ratedItems.length).toFixed(1)
-    : "0.0";
-
-  // Movies watched per month
-  const moviesPerMonth: Record<string, number> = {};
-  movies.forEach(item => {
-    const ts = getWatchTime(item);
-    if (ts) {
-      const d = new Date(ts);
-      if (!isNaN(d.getTime())) {
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-        moviesPerMonth[key] = (moviesPerMonth[key] || 0) + 1;
-      }
-    }
-  });
-
-  // Heatmap: Month of year vs Day of month (12 x 31) only for current year
-  const heatmap: { month: number; day: number; count: number }[] = [];
-  const heatmapGrid: Record<string, number> = {};
-  for (let m = 1; m <= HEATMAP_MONTHS_COUNT; m++) {
-    for (let d = 1; d <= HEATMAP_DAYS_COUNT; d++) {
-      heatmapGrid[`${m}-${d}`] = 0;
+      timeline[monthYear].push(entry.item);
     }
   }
-  const currentYear = new Date().getFullYear();
-  library.forEach(item => {
-    const ts = getWatchTime(item);
-    if (ts) {
-      const d = new Date(ts);
-      if (!isNaN(d.getTime())) {
-        if (d.getFullYear() === currentYear) {
-          const month = d.getMonth() + 1;
-          const day = d.getDate();
-          heatmapGrid[`${month}-${day}`] = (heatmapGrid[`${month}-${day}`] || 0) + 1;
-        }
-      }
-    }
-  });
+
+  const recentlyWatched = enriched.slice(0, 10).map(x => x.item);
+
+  const avgImdbRating = ratedCount > 0
+    ? (ratedSum / ratedCount).toFixed(1)
+    : "0.0";
+
+  const heatmap: { month: number; day: number; count: number }[] = [];
   Object.entries(heatmapGrid).forEach(([key, count]) => {
     const [month, day] = key.split("-").map(Number);
     heatmap.push({ month, day, count });
   });
 
-  // Top decades
   const topDecades = Object.entries(decadeCounts)
     .map(([decade, count]) => ({ decade, count }))
     .sort((a, b) => b.count - a.count);
 
-  // Sorting helper
   const sortMapToArray = (counts: Record<string, number>) =>
     Object.entries(counts)
       .map(([name, count]) => ({ name, count }))
