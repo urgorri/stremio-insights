@@ -12,6 +12,28 @@ import {
 
 console.log("[SYNC] Content Script loaded.");
 
+export async function mapConcurrent<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  if (items.length === 0) return [];
+  const concurrency = Math.max(1, limit);
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex++;
+      results[currentIndex] = await fn(items[currentIndex], currentIndex);
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
 interface SyncStats {
   apiCallsCount: number;
   cinemetaEnrichedCount: number;
@@ -461,8 +483,11 @@ export async function runSyncPipeline() {
     console.log(`[SYNC] Out of ${datastoreKeys.length} items, ${itemsToFetch.length} need metadata fetch/repair.`);
 
     const fetchedMetaMap = new Map<string, any>();
-    const fetchResults = await Promise.all(
-      itemsToFetch.map(async (imdbId) => {
+    const CONCURRENCY_LIMIT = 5;
+    const fetchResults = await mapConcurrent(
+      itemsToFetch,
+      CONCURRENCY_LIMIT,
+      async (imdbId) => {
         const cleanId = imdbId.split(":")[0];
         let type: "movie" | "series" = imdbId.includes(":") ? "series" : "movie";
         const getMeta = datastoreGetMap.get(imdbId);
@@ -514,7 +539,7 @@ export async function runSyncPipeline() {
           console.error(`[SYNC] Error fetching metadata for ${imdbId}:`, err);
           return { imdbId, meta: null };
         }
-      })
+      }
     );
 
     fetchResults.forEach(res => {

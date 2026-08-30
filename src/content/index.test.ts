@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { needsRepair, injectInsightsSidebar, runSyncPipeline } from "./index";
+import { needsRepair, injectInsightsSidebar, runSyncPipeline, mapConcurrent } from "./index";
 import { CONTENT_TYPE_MOVIE, CONTENT_TYPE_SERIES, GENRE_HISTORICAL, RELEASE_YEAR_UNKNOWN } from "../utils/constants";
 import { useInsightsStore } from "../hooks/useInsightsStore";
 
@@ -208,6 +208,32 @@ describe("injectInsightsSidebar", () => {
     childEl.click();
 
     expect(sidebarWrapper.classList.contains("open")).toBe(true);
+  });
+});
+
+describe("mapConcurrent Utility & Concurrency Control", () => {
+  it("should process items and limit active concurrent execution", async () => {
+    const items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    let activeWorkers = 0;
+    let maxActiveWorkers = 0;
+
+    const results = await mapConcurrent(items, 3, async (item) => {
+      activeWorkers++;
+      if (activeWorkers > maxActiveWorkers) {
+        maxActiveWorkers = activeWorkers;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      activeWorkers--;
+      return item * 2;
+    });
+
+    expect(results).toEqual([2, 4, 6, 8, 10, 12, 14, 16, 18, 20]);
+    expect(maxActiveWorkers).toBeLessThanOrEqual(3);
+  });
+
+  it("should return an empty array if items array is empty", async () => {
+    const results = await mapConcurrent([], 5, async (item) => item);
+    expect(results).toEqual([]);
   });
 });
 
