@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { needsRepair, injectInsightsSidebar, runSyncPipeline } from "./index";
+import { needsRepair, injectInsightsSidebar, runSyncPipeline, fetchEnrichedMetadata } from "./index";
 import { CONTENT_TYPE_MOVIE, CONTENT_TYPE_SERIES, GENRE_HISTORICAL, RELEASE_YEAR_UNKNOWN } from "../utils/constants";
 import { useInsightsStore } from "../hooks/useInsightsStore";
 
@@ -381,6 +381,125 @@ describe("runSyncPipeline", () => {
 });
 
 describe("Content Script Chrome Message Listener", () => {
+  describe("OMDb Fallback Error Handling", () => {
+    let originalFetch: any;
+    let originalChrome: any;
+
+    beforeEach(() => {
+      originalFetch = global.fetch;
+      originalChrome = global.chrome;
+      global.chrome = {
+        storage: {
+          local: {
+            get: vi.fn().mockImplementation(() => Promise.resolve({ omdb_api_key: "test_omdb_key" }))
+          }
+        }
+      } as any;
+    });
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+      global.chrome = originalChrome;
+      vi.restoreAllMocks();
+    });
+
+    it("should catch fetch network error during OMDB fallback and log console.warn", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const fetchError = new Error("Network connection error");
+
+      global.fetch = vi.fn().mockImplementation((url: string) => {
+        if (url.includes("v3-cinemeta.strem.io")) {
+          return Promise.resolve({ ok: false });
+        }
+        if (url.includes("omdbapi.com")) {
+          return Promise.reject(fetchError);
+        }
+        return Promise.resolve({ ok: false });
+      });
+
+      const stats = {
+        apiCallsCount: 0,
+        cinemetaEnrichedCount: 0,
+        omdbFallbackCount: 0,
+        missingGenresCount: 0,
+        missingDirectorsCount: 0,
+        unknownReleaseYearsCount: 0
+      };
+
+      const result = await fetchEnrichedMetadata("tt1234567", "movie", "Test Movie", stats);
+
+      expect(warnSpy).toHaveBeenCalledWith("[METADATA] OMDb fallback failed for tt1234567:", fetchError);
+      expect(result).toEqual({
+        title: "",
+        type: "movie",
+        genres: ["Historical"],
+        director: null,
+        directors: undefined,
+        actors: [],
+        runtime: "Unknown",
+        plot: "",
+        imdbRating: "",
+        poster: "",
+        releaseYear: "Unknown"
+      });
+      expect(stats.omdbFallbackCount).toBe(0);
+    });
+
+    it("should handle non-ok HTTP response from OMDb API gracefully", async () => {
+      global.fetch = vi.fn().mockImplementation((url: string) => {
+        if (url.includes("v3-cinemeta.strem.io")) {
+          return Promise.resolve({ ok: false });
+        }
+        if (url.includes("omdbapi.com")) {
+          return Promise.resolve({ ok: false, status: 500 });
+        }
+        return Promise.resolve({ ok: false });
+      });
+
+      const stats = {
+        apiCallsCount: 0,
+        cinemetaEnrichedCount: 0,
+        omdbFallbackCount: 0,
+        missingGenresCount: 0,
+        missingDirectorsCount: 0,
+        unknownReleaseYearsCount: 0
+      };
+
+      const result = await fetchEnrichedMetadata("tt1234567", "movie", "Test Movie", stats);
+
+      expect(result.genres).toEqual(["Historical"]);
+      expect(result.director).toBeNull();
+      expect(stats.omdbFallbackCount).toBe(0);
+    });
+
+    it("should skip OMDb fetch when omdb_api_key is not set", async () => {
+      global.chrome = {
+        storage: {
+          local: {
+            get: vi.fn().mockImplementation(() => Promise.resolve({ omdb_api_key: undefined }))
+          }
+        }
+      } as any;
+
+      const fetchSpy = vi.fn().mockResolvedValue({ ok: false });
+      global.fetch = fetchSpy;
+
+      const stats = {
+        apiCallsCount: 0,
+        cinemetaEnrichedCount: 0,
+        omdbFallbackCount: 0,
+        missingGenresCount: 0,
+        missingDirectorsCount: 0,
+        unknownReleaseYearsCount: 0
+      };
+
+      await fetchEnrichedMetadata("tt1234567", "movie", "Test Movie", stats);
+
+      const omdbCall = fetchSpy.mock.calls.find((call: any[]) => typeof call[0] === "string" && call[0].includes("omdbapi.com"));
+      expect(omdbCall).toBeUndefined();
+    });
+  });
+
   it("should handle PING message", () => {
     let listener: any;
     const addListenerMock = vi.fn().mockImplementation((fn) => {
