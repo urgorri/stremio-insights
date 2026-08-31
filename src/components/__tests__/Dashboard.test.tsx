@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { Dashboard } from "../Dashboard";
+import { Dashboard, getHeatmapCellColorClass } from "../Dashboard";
 import { useInsightsStore } from "../../hooks/useInsightsStore";
 
 // Mock the zustand store hook
@@ -295,5 +295,31 @@ describe("Dashboard Component", () => {
 
     global.chrome = originalChrome;
     Object.defineProperty(window, "location", { value: originalLocation, writable: true });
+  });
+
+  describe("getHeatmapCellColorClass", () => {
+    it("should return correct classes for count 0", () => {
+      expect(getHeatmapCellColorClass(0)).toBe("bg-gray-800/20");
+    });
+
+    it("should return correct classes for counts 1 and 2", () => {
+      expect(getHeatmapCellColorClass(1)).toBe("bg-purple-900/40 border border-purple-800/20");
+      expect(getHeatmapCellColorClass(2)).toBe("bg-purple-900/40 border border-purple-800/20");
+    });
+
+    it("should return correct classes for counts 3 to 5", () => {
+      expect(getHeatmapCellColorClass(3)).toBe("bg-purple-700/60");
+      expect(getHeatmapCellColorClass(5)).toBe("bg-purple-700/60");
+    });
+
+    it("should return correct classes for counts 6 to 9", () => {
+      expect(getHeatmapCellColorClass(6)).toBe("bg-purple-500/80");
+      expect(getHeatmapCellColorClass(9)).toBe("bg-purple-500/80");
+    });
+
+    it("should return correct classes for count 10 or greater", () => {
+      expect(getHeatmapCellColorClass(10)).toBe("bg-purple-400 shadow-[0_0_4px_#a855f7]");
+      expect(getHeatmapCellColorClass(25)).toBe("bg-purple-400 shadow-[0_0_4px_#a855f7]");
+    });
   });
 });

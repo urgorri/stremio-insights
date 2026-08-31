@@ -23,6 +23,17 @@ import {
   Maximize2
 } from "lucide-react";
 
+/**
+ * Helper function to select Tailwind color classes based on watch count frequency.
+ */
+export const getHeatmapCellColorClass = (count: number): string => {
+  if (count >= 10) return "bg-purple-400 shadow-[0_0_4px_#a855f7]";
+  if (count >= 6) return "bg-purple-500/80";
+  if (count >= 3) return "bg-purple-700/60";
+  if (count > 0) return "bg-purple-900/40 border border-purple-800/20";
+  return "bg-gray-800/20";
+};
+
 export const Dashboard: React.FC = () => {
   const {
     stats,
@@ -48,12 +59,10 @@ export const Dashboard: React.FC = () => {
 
     // Auto-sync if running inside extension popup when a Stremio tab is present
     if (isPopup) {
-      console.log("[SYNC]\nPopup opened");
       if (typeof chrome !== "undefined" && chrome.tabs) {
         chrome.tabs.query({ url: "https://web.stremio.com/*" }, (tabs) => {
           if (tabs && tabs.length > 0) {
             setIsStremioTabActive(true);
-            console.log("[SYNC]\nStremio tab found. Starting background sync...");
             if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
               chrome.storage.local.get(["stremio_auth_key"], async (res) => {
                 const key = res.stremio_auth_key || "";
@@ -69,7 +78,6 @@ export const Dashboard: React.FC = () => {
               });
             }
           } else {
-            console.log("[SYNC]\nNo Stremio tab found.");
             setIsStremioTabActive(false);
           }
         });
@@ -79,7 +87,6 @@ export const Dashboard: React.FC = () => {
     // Listen for real-time synchronization updates
     const handleMessage = (msg: any) => {
       if (msg && msg.type === "DATA_SYNCHRONIZED") {
-        console.log("[Stremio Insights Popup] Received DATA_SYNCHRONIZED. Refreshing statistics...");
         fetchData();
       }
     };
@@ -666,12 +673,7 @@ export const Dashboard: React.FC = () => {
                         const cell = heatmapMap.get(`${monthNum}-${dayNum}`);
                         const count = cell?.count || 0;
 
-                        // Select color depth based on watch frequency
-                        let bgClass = "bg-gray-800/20";
-                        if (count > 0 && count < 3) bgClass = "bg-purple-900/40 border border-purple-800/20";
-                        else if (count >= 3 && count < 6) bgClass = "bg-purple-700/60";
-                        else if (count >= 6 && count < 10) bgClass = "bg-purple-500/80";
-                        else if (count >= 10) bgClass = "bg-purple-400 shadow-[0_0_4px_#a855f7]";
+                        const bgClass = getHeatmapCellColorClass(count);
 
                         // Tooltip info
                         const monthsNames = [
