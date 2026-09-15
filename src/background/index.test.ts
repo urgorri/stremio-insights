@@ -194,6 +194,71 @@ describe("Background Service Worker", () => {
 
       consoleSpy.mockRestore();
     });
+
+    it("should handle CSV formatting errors when convertToCSV throws an error", () => {
+      const sendResponse = vi.fn();
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      // Pass library item with invalid genres that causes convertToCSV to throw
+      const invalidLibrary: any = [{ imdb_id: "tt123", genres: 12345 }];
+
+      mockStorageGet.mockImplementation((keys, callback) => {
+        callback({ library: invalidLibrary });
+      });
+
+      const result = messageListener({ type: "EXPORT_DATA", payload: { format: "csv" } }, {}, sendResponse);
+
+      expect(result).toBe(true);
+      expect(sendResponse).toHaveBeenCalledWith({
+        success: false,
+        error: expect.stringMatching(/join is not a function|TypeError/)
+      });
+
+      consoleSpy.mockRestore();
+    });
+
+    it("should fallback to default error message when thrown error has no message property", () => {
+      const sendResponse = vi.fn();
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      // Create an object whose property getter throws a raw object with no message
+      const invalidItem = {};
+      Object.defineProperty(invalidItem, "imdb_id", {
+        get() {
+          throw { customError: "No message property" };
+        }
+      });
+
+      mockStorageGet.mockImplementation((keys, callback) => {
+        callback({ library: [invalidItem] });
+      });
+
+      const result = messageListener({ type: "EXPORT_DATA", payload: { format: "csv" } }, {}, sendResponse);
+
+      expect(result).toBe(true);
+      expect(sendResponse).toHaveBeenCalledWith({
+        success: false,
+        error: "Failed to format export data"
+      });
+
+      consoleSpy.mockRestore();
+    });
+
+    it("should handle empty or missing library gracefully", () => {
+      const sendResponse = vi.fn();
+
+      mockStorageGet.mockImplementation((keys, callback) => {
+        callback({}); // library is undefined
+      });
+
+      const result = messageListener({ type: "EXPORT_DATA" }, {}, sendResponse);
+
+      expect(result).toBe(true);
+      expect(sendResponse).toHaveBeenCalledWith({
+        success: true,
+        data: "[]"
+      });
+    });
   });
 
   describe("CHECK_STATUS Message", () => {
