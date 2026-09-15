@@ -279,7 +279,17 @@ export async function runSyncPipeline() {
     let authKey = "";
     try {
       const profile = JSON.parse(profileStr);
-      authKey = profile?.auth?.key || "";
+      if (
+        typeof profile === "object" &&
+        profile !== null &&
+        !Array.isArray(profile) &&
+        typeof profile.auth === "object" &&
+        profile.auth !== null &&
+        !Array.isArray(profile.auth) &&
+        typeof profile.auth.key === "string"
+      ) {
+        authKey = profile.auth.key;
+      }
     } catch (e) {
       console.error("[SYNC] Error parsing profile JSON:", e);
       return;

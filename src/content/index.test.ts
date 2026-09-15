@@ -271,6 +271,30 @@ describe("runSyncPipeline", () => {
     expect(warnSpy).toHaveBeenCalledWith("[SYNC] No authKey found in Stremio profile.");
   });
 
+  it("should exit early and safely when profile schema is invalid or contains non-string key", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const invalidProfiles = [
+      true,
+      12345,
+      "just a string",
+      ["an", "array"],
+      { auth: null },
+      { auth: "not-an-object" },
+      { auth: { key: 12345 } },
+      { auth: { key: true } },
+      { auth: { key: { nested: "object" } } },
+      { auth: { key: ["array"] } }
+    ];
+
+    for (const invalidProfile of invalidProfiles) {
+      warnSpy.mockClear();
+      localStorage.setItem("profile", JSON.stringify(invalidProfile));
+      await runSyncPipeline();
+      expect(warnSpy).toHaveBeenCalledWith("[SYNC] No authKey found in Stremio profile.");
+    }
+  });
+
   it("should exit early if datastoreMeta fetch fails", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     localStorage.setItem("profile", JSON.stringify({ auth: { key: "test_key" } }));
