@@ -140,7 +140,7 @@ function applyOmdbFallback(omdbData: any, ctx: MetadataContext): void {
   }
 }
 
-async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", title: string, stats: SyncStats): Promise<any> {
+export async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", title: string, stats: SyncStats): Promise<any> {
   const cleanId = imdbId.split(":")[0];
   const urlType = type === "series" ? "series" : "movie";
 
