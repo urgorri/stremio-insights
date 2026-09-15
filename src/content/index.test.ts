@@ -10,6 +10,22 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
 };
 
+function createMockItem(overrides: Record<string, any> = {}) {
+  const defaultItem = {
+    type: CONTENT_TYPE_MOVIE,
+    genres: ["Action"],
+    director: "John Doe",
+    releaseYear: "2020"
+  };
+  const result = { ...defaultItem, ...overrides };
+  Object.keys(overrides).forEach(key => {
+    if (overrides[key] === undefined) {
+      delete (result as Record<string, any>)[key];
+    }
+  });
+  return result;
+}
+
 describe("needsRepair", () => {
   it("should return true if item is falsy", () => {
     expect(needsRepair(null)).toBe(true);
@@ -17,79 +33,79 @@ describe("needsRepair", () => {
   });
 
   it("should return true if item type does not match correctType", () => {
-    const item = { type: CONTENT_TYPE_MOVIE, genres: ["Action"], director: "John", releaseYear: "2020" };
+    const item = createMockItem();
     expect(needsRepair(item, CONTENT_TYPE_SERIES)).toBe(true);
   });
 
   it("should return false for valid movie", () => {
-    const item = { type: CONTENT_TYPE_MOVIE, genres: ["Action"], director: "John Doe", releaseYear: "2020" };
+    const item = createMockItem();
     expect(needsRepair(item)).toBe(false);
   });
 
   it("should return false for valid series (director can be missing)", () => {
-    const item = { type: CONTENT_TYPE_SERIES, genres: ["Drama"], releaseYear: "2021" };
+    const item = createMockItem({ type: CONTENT_TYPE_SERIES, genres: ["Drama"], director: undefined, releaseYear: "2021" });
     expect(needsRepair(item)).toBe(false);
   });
 
   describe("genres validation", () => {
     it(`should return true if genres array contains only '${GENRE_HISTORICAL}'`, () => {
-      const item = { type: CONTENT_TYPE_MOVIE, genres: [GENRE_HISTORICAL], director: "John", releaseYear: "2020" };
+      const item = createMockItem({ genres: [GENRE_HISTORICAL] });
       expect(needsRepair(item)).toBe(true);
     });
 
     it(`should return false if genres array contains '${GENRE_HISTORICAL}' and others`, () => {
-      const item = { type: CONTENT_TYPE_MOVIE, genres: [GENRE_HISTORICAL, "Action"], director: "John", releaseYear: "2020" };
+      const item = createMockItem({ genres: [GENRE_HISTORICAL, "Action"] });
       expect(needsRepair(item)).toBe(false);
     });
 
     it("should return true if genres is missing", () => {
-      const item = { type: CONTENT_TYPE_MOVIE, director: "John", releaseYear: "2020" };
+      const item = createMockItem({ genres: undefined });
       expect(needsRepair(item)).toBe(true);
     });
 
     it("should return true if genres is empty array", () => {
-      const item = { type: CONTENT_TYPE_MOVIE, genres: [], director: "John", releaseYear: "2020" };
+      const item = createMockItem({ genres: [] });
       expect(needsRepair(item)).toBe(true);
     });
 
     it("should return true if genres is not an array", () => {
-      const item = { type: CONTENT_TYPE_MOVIE, genres: "Action", director: "John", releaseYear: "2020" };
+      const item = createMockItem({ genres: "Action" });
       expect(needsRepair(item)).toBe(true);
     });
   });
 
   describe("director validation", () => {
     it("should return true for movie if director is null", () => {
-      const item = { type: CONTENT_TYPE_MOVIE, genres: ["Action"], director: null, releaseYear: "2020" };
+      const item = createMockItem({ director: null });
       expect(needsRepair(item)).toBe(true);
     });
 
     it("should return true for movie if director is undefined", () => {
-      const item = { type: CONTENT_TYPE_MOVIE, genres: ["Action"], releaseYear: "2020" };
+      const item = createMockItem({ director: undefined });
       expect(needsRepair(item)).toBe(true);
     });
 
     it("should return false for series if director is null", () => {
-      const item = { type: CONTENT_TYPE_SERIES, genres: ["Action"], director: null, releaseYear: "2020" };
+      const item = createMockItem({ type: CONTENT_TYPE_SERIES, director: null });
       expect(needsRepair(item)).toBe(false);
     });
   });
 
   describe("releaseYear validation", () => {
     it("should return true if releaseYear is missing", () => {
-      const item = { type: CONTENT_TYPE_MOVIE, genres: ["Action"], director: "John" };
+      const item = createMockItem({ releaseYear: undefined });
       expect(needsRepair(item)).toBe(true);
     });
 
     it(`should return true if releaseYear is '${RELEASE_YEAR_UNKNOWN}'`, () => {
-      const item = { type: CONTENT_TYPE_MOVIE, genres: ["Action"], director: "John", releaseYear: RELEASE_YEAR_UNKNOWN };
+      const item = createMockItem({ releaseYear: RELEASE_YEAR_UNKNOWN });
       expect(needsRepair(item)).toBe(true);
     });
 
     it("should return true if releaseYear is malformed (not 4 digits)", () => {
       const cases = ["20", "20204", "abcd", "20-20", "202X"];
       cases.forEach(year => {
-        const item = { type: CONTENT_TYPE_MOVIE, genres: ["Action"], director: "John", releaseYear: year };
+        const item = createMockItem({ releaseYear: year });
         expect(needsRepair(item)).toBe(true);
       });
     });
