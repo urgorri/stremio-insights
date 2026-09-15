@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { needsRepair, injectInsightsSidebar, runSyncPipeline } from "./index";
+import { needsRepair, injectInsightsSidebar, runSyncPipeline, fetchEnrichedMetadata } from "./index";
 import { CONTENT_TYPE_MOVIE, CONTENT_TYPE_SERIES, GENRE_HISTORICAL, RELEASE_YEAR_UNKNOWN } from "../utils/constants";
 import { useInsightsStore } from "../hooks/useInsightsStore";
 
@@ -377,6 +377,256 @@ describe("runSyncPipeline", () => {
         metadata_cache: expect.any(Object)
       })
     );
+  });
+
+  it("should handle Cinemeta API fetch network error rejection during sync pipeline and continue gracefully", async () => {
+    localStorage.setItem("profile", JSON.stringify({ auth: { key: "test_key" } }));
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("datastoreMeta")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            result: [
+              ["tt9999999", 1600000000000]
+            ]
+          })
+        });
+      }
+      if (url.includes("datastoreGet")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            result: [
+              { _id: "tt9999999", name: "Network Fail Movie", type: "movie", state: { timeWatched: 1000, duration: 2000 } }
+            ]
+          })
+        });
+      }
+      if (url.includes("feed.json")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([])
+        });
+      }
+      if (url.includes("v3-cinemeta.strem.io")) {
+        return Promise.reject(new TypeError("Cinemeta API Network Failure"));
+      }
+      if (url.includes("omdbapi.com")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            Response: "True",
+            Genre: "Drama, Thriller",
+            Director: "Jane Doe",
+            Plot: "A dramatic thriller story.",
+            Runtime: "100 min",
+            imdbRating: "7.5",
+            Poster: "poster.jpg",
+            Title: "Network Fail Movie",
+            Year: "2022"
+          })
+        });
+      }
+      return Promise.resolve({ ok: false });
+    });
+
+    await runSyncPipeline();
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[METADATA] Cinemeta failed for tt9999999:",
+      expect.any(TypeError)
+    );
+
+    expect(chrome.storage.local.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        library: expect.arrayContaining([
+          expect.objectContaining({
+            imdbId: "tt9999999",
+            genres: ["Drama", "Thriller"],
+            director: "Jane Doe"
+          })
+        ])
+      })
+    );
+  });
+});
+
+describe("fetchEnrichedMetadata", () => {
+  let originalFetch: any;
+  let originalChrome: any;
+
+  beforeEach(() => {
+    originalFetch = global.fetch;
+    originalChrome = global.chrome;
+
+    global.chrome = {
+      storage: {
+        local: {
+          get: vi.fn().mockResolvedValue({ omdb_api_key: "test_omdb_key" }),
+          set: vi.fn().mockResolvedValue(undefined)
+        }
+      }
+    } as any;
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    global.chrome = originalChrome;
+    vi.restoreAllMocks();
+  });
+
+  const createStats = () => ({
+    apiCallsCount: 0,
+    cinemetaEnrichedCount: 0,
+    omdbFallbackCount: 0,
+    missingGenresCount: 0,
+    missingDirectorsCount: 0,
+    unknownReleaseYearsCount: 0
+  });
+
+  it("should handle primary Cinemeta fetch network error rejection and fallback to OMDb when available", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const stats = createStats();
+
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("v3-cinemeta.strem.io")) {
+        return Promise.reject(new TypeError("Failed to fetch from Cinemeta"));
+      }
+      if (url.includes("omdbapi.com")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            Response: "True",
+            Genre: "Sci-Fi, Action",
+            Director: "John Carpenter",
+            Plot: "Alien creature in Antarctica.",
+            Runtime: "109 min",
+            imdbRating: "8.2",
+            Poster: "thing.jpg",
+            Actors: "Kurt Russell",
+            Title: "The Thing",
+            Year: "1982"
+          })
+        });
+      }
+      return Promise.resolve({ ok: false });
+    });
+
+    const result = await fetchEnrichedMetadata("tt0084787", "movie", "The Thing", stats);
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[METADATA] Cinemeta failed for tt0084787:",
+      expect.any(TypeError)
+    );
+
+    expect(result).toEqual({
+      title: "The Thing",
+      type: "movie",
+      genres: ["Sci-Fi", "Action"],
+      director: "John Carpenter",
+      directors: undefined,
+      actors: ["Kurt Russell"],
+      runtime: "109 min",
+      plot: "Alien creature in Antarctica.",
+      imdbRating: "8.2",
+      poster: "thing.jpg",
+      releaseYear: "1982"
+    });
+
+    expect(stats.omdbFallbackCount).toBe(1);
+  });
+
+  it("should handle primary Cinemeta fetch network error rejection and OMDb failure, returning default fallback values", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const stats = createStats();
+
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("v3-cinemeta.strem.io")) {
+        return Promise.reject(new TypeError("Cinemeta network timeout"));
+      }
+      if (url.includes("omdbapi.com")) {
+        return Promise.reject(new TypeError("OMDb network timeout"));
+      }
+      return Promise.resolve({ ok: false });
+    });
+
+    const result = await fetchEnrichedMetadata("tt0000000", "movie", "Unknown Film", stats);
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[METADATA] Cinemeta failed for tt0000000:",
+      expect.any(TypeError)
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[METADATA] OMDb fallback failed for tt0000000:",
+      expect.any(TypeError)
+    );
+
+    expect(result).toEqual({
+      title: "",
+      type: "movie",
+      genres: ["Historical"],
+      director: null,
+      directors: undefined,
+      actors: [],
+      runtime: "Unknown",
+      plot: "",
+      imdbRating: "",
+      poster: "",
+      releaseYear: "Unknown"
+    });
+
+    expect(stats.missingGenresCount).toBe(1);
+    expect(stats.missingDirectorsCount).toBe(1);
+    expect(stats.unknownReleaseYearsCount).toBe(1);
+  });
+
+  it("should handle fallback Cinemeta type fetch network error rejection when primary fetch returns no metadata", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const stats = createStats();
+
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("v3-cinemeta.strem.io/meta/series/tt1111111")) {
+        // Primary urlType 'series' fetch returns no meta
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ meta: null })
+        });
+      }
+      if (url.includes("v3-cinemeta.strem.io/meta/movie/tt1111111")) {
+        // Fallback urlType 'movie' fetch throws network error
+        return Promise.reject(new TypeError("Fallback Cinemeta type network rejection"));
+      }
+      if (url.includes("omdbapi.com")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            Response: "True",
+            Genre: "Comedy",
+            Director: "Christopher Guest",
+            Plot: "A mockumentary about a dog show.",
+            Runtime: "90 min",
+            imdbRating: "7.4",
+            Poster: "bestinshow.jpg",
+            Title: "Best in Show",
+            Year: "2000"
+          })
+        });
+      }
+      return Promise.resolve({ ok: false });
+    });
+
+    const result = await fetchEnrichedMetadata("tt1111111", "series", "Best in Show", stats);
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[METADATA] Cinemeta failed for tt1111111:",
+      expect.any(TypeError)
+    );
+
+    expect(result.genres).toEqual(["Comedy"]);
+    expect(result.director).toBe("Christopher Guest");
+    expect(stats.omdbFallbackCount).toBe(1);
   });
 });
 
