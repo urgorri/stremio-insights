@@ -241,25 +241,38 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
 }
 
 export function groupEventsIntoTimeline(events: PlaybackEvent[]): Record<string, Record<string, PlaybackEvent[]>> {
-  const sorted = [...events].sort((a, b) => getWatchTime(b) - getWatchTime(a));
-  const timeline: Record<string, Record<string, PlaybackEvent[]>> = {};
+  const intermediate: Record<string, Record<string, { event: PlaybackEvent; ts: number }[]>> = {};
 
-  for (const event of sorted) {
+  for (let i = 0; i < events.length; i++) {
+    const event = events[i];
     const ts = getWatchTime(event);
     if (!ts) continue;
+
     const d = new Date(ts);
     if (isNaN(d.getTime())) continue;
 
     const year = String(d.getFullYear());
     const month = MONTHS[d.getMonth()];
 
-    if (!timeline[year]) {
-      timeline[year] = {};
+    if (!intermediate[year]) {
+      intermediate[year] = {};
     }
-    if (!timeline[year][month]) {
-      timeline[year][month] = [];
+    if (!intermediate[year][month]) {
+      intermediate[year][month] = [];
     }
-    timeline[year][month].push(event);
+    intermediate[year][month].push({ event, ts });
+  }
+
+  const timeline: Record<string, Record<string, PlaybackEvent[]>> = {};
+
+  for (const year in intermediate) {
+    timeline[year] = {};
+    const yearObj = intermediate[year];
+    for (const month in yearObj) {
+      const items = yearObj[month];
+      items.sort((a, b) => b.ts - a.ts);
+      timeline[year][month] = items.map(x => x.event);
+    }
   }
 
   return timeline;
