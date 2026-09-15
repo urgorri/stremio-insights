@@ -296,4 +296,271 @@ describe("Dashboard Component", () => {
     global.chrome = originalChrome;
     Object.defineProperty(window, "location", { value: originalLocation, writable: true });
   });
+
+  it("should catch and log warning when auto sync fails on popup load with chrome.storage.local", async () => {
+    const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const errorMsg = "Auto sync failed in test";
+    mockPerformSync.mockRejectedValueOnce(new Error(errorMsg));
+
+    const originalChrome = global.chrome;
+    const originalLocation = window.location;
+
+    Object.defineProperty(window, "location", {
+      value: { ...originalLocation, protocol: "chrome-extension:" },
+      writable: true,
+    });
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
+      },
+      tabs: {
+        query: vi.fn().mockImplementation((query, cb) => cb([{ id: 101 }])),
+      },
+      storage: {
+        local: {
+          get: vi.fn().mockImplementation((keys, cb) => cb({ stremio_auth_key: "auth-123" })),
+        },
+      },
+    } as any;
+
+    render(<Dashboard />);
+
+    await waitFor(() => {
+      expect(mockPerformSync).toHaveBeenCalledWith("auth-123");
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        "[SYNC] Auto sync on popup load skipped or deferred:",
+        errorMsg
+      );
+    });
+
+    consoleWarnSpy.mockRestore();
+    global.chrome = originalChrome;
+    Object.defineProperty(window, "location", { value: originalLocation, writable: true });
+  });
+
+  it("should catch and log warning when auto sync fails on popup load without chrome.storage.local", async () => {
+    const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const errorMsg = "Auto sync fallback failed";
+    mockPerformSync.mockRejectedValueOnce(new Error(errorMsg));
+
+    const originalChrome = global.chrome;
+    const originalLocation = window.location;
+
+    Object.defineProperty(window, "location", {
+      value: { ...originalLocation, protocol: "chrome-extension:" },
+      writable: true,
+    });
+
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
+      },
+      tabs: {
+        query: vi.fn().mockImplementation((query, cb) => cb([{ id: 102 }])),
+      },
+    } as any;
+
+    render(<Dashboard />);
+
+    await waitFor(() => {
+      expect(mockPerformSync).toHaveBeenCalledWith("");
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        "[SYNC] Auto sync on popup load skipped or deferred:",
+        errorMsg
+      );
+    });
+
+    consoleWarnSpy.mockRestore();
+    global.chrome = originalChrome;
+    Object.defineProperty(window, "location", { value: originalLocation, writable: true });
+  });
+
+  it("should catch and log error when manual sync fails with chrome.storage.local", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const syncError = new Error("Manual sync failure");
+    mockPerformSync.mockRejectedValueOnce(syncError);
+
+    const originalChrome = global.chrome;
+    global.chrome = {
+      storage: {
+        local: {
+          get: vi.fn().mockImplementation((keys, cb) => cb({ stremio_auth_key: "key-456" })),
+        },
+      },
+    } as any;
+
+    render(<Dashboard />);
+
+    const syncButton = screen.getByTitle("Synchronize now");
+    fireEvent.click(syncButton);
+
+    await waitFor(() => {
+      expect(mockPerformSync).toHaveBeenCalledWith("key-456");
+      expect(consoleErrorSpy).toHaveBeenCalledWith("[SYNC] Manual sync failed:", syncError);
+    });
+
+    consoleErrorSpy.mockRestore();
+    global.chrome = originalChrome;
+  });
+
+  it("should catch and log error when manual sync fails without chrome.storage.local", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const syncError = new Error("Manual sync fallback failure");
+    mockPerformSync.mockRejectedValueOnce(syncError);
+
+    const originalChrome = global.chrome;
+    global.chrome = undefined as any;
+
+    render(<Dashboard />);
+
+    const syncButton = screen.getByTitle("Synchronize now");
+    fireEvent.click(syncButton);
+
+    await waitFor(() => {
+      expect(mockPerformSync).toHaveBeenCalledWith("");
+      expect(consoleErrorSpy).toHaveBeenCalledWith("[SYNC] Manual sync failed:", syncError);
+    });
+
+    consoleErrorSpy.mockRestore();
+    global.chrome = originalChrome;
+  });
+
+  it("should call fetchData when receiving DATA_SYNCHRONIZED runtime message", () => {
+    let messageListener: any = null;
+    const originalChrome = global.chrome;
+    global.chrome = {
+      runtime: {
+        onMessage: {
+          addListener: vi.fn().mockImplementation((fn) => {
+            messageListener = fn;
+          }),
+          removeListener: vi.fn(),
+        },
+      },
+    } as any;
+
+    const { unmount } = render(<Dashboard />);
+
+    expect(mockFetchData).toHaveBeenCalledTimes(1);
+
+    expect(messageListener).toBeTruthy();
+    messageListener({ type: "DATA_SYNCHRONIZED" });
+
+    expect(mockFetchData).toHaveBeenCalledTimes(2);
+
+    unmount();
+    expect(global.chrome.runtime.onMessage.removeListener).toHaveBeenCalledWith(messageListener);
+
+    global.chrome = originalChrome;
+  });
+
+  it("should handle CSV and JSON export in settings tab", async () => {
+    const sendMessageMock = vi.fn().mockImplementation((msg, cb) => {
+      if (cb) {
+        cb({ success: true, data: "col1,col2\nval1,val2" });
+      }
+    });
+
+    const originalChrome = global.chrome;
+    global.chrome = {
+      runtime: {
+        sendMessage: sendMessageMock,
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
+      },
+    } as any;
+
+    // Mock URL.createObjectURL and URL.revokeObjectURL
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+    URL.createObjectURL = vi.fn().mockReturnValue("blob:http://localhost/mock-url");
+    URL.revokeObjectURL = vi.fn();
+
+    render(<Dashboard />);
+
+    // Go to settings tab
+    fireEvent.click(screen.getByText("settings"));
+
+    // Click Export CSV
+    fireEvent.click(screen.getByText("Export CSV"));
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      { type: "EXPORT_DATA", payload: { format: "csv" } },
+      expect.any(Function)
+    );
+
+    // Click Export JSON
+    fireEvent.click(screen.getByText("Export JSON"));
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      { type: "EXPORT_DATA", payload: { format: "json" } },
+      expect.any(Function)
+    );
+
+    URL.createObjectURL = originalCreateObjectURL;
+    URL.revokeObjectURL = originalRevokeObjectURL;
+    global.chrome = originalChrome;
+  });
+
+  it("should render inactive Stremio tab state and handle Open Stremio button", () => {
+    const originalChrome = global.chrome;
+    const originalLocation = window.location;
+
+    Object.defineProperty(window, "location", {
+      value: { ...originalLocation, protocol: "chrome-extension:" },
+      writable: true,
+    });
+
+    const tabsCreateMock = vi.fn();
+    global.chrome = {
+      runtime: {
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
+      },
+      tabs: {
+        query: vi.fn().mockImplementation((query, cb) => cb([])),
+        create: tabsCreateMock,
+      },
+    } as any;
+
+    render(<Dashboard />);
+
+    expect(screen.getByText("Stremio is not active")).toBeTruthy();
+
+    const openStremioBtn = screen.getByText("Open Stremio");
+    fireEvent.click(openStremioBtn);
+
+    expect(tabsCreateMock).toHaveBeenCalledWith({ url: "https://web.stremio.com/#/continuewatching" });
+
+    // Test window.open fallback when chrome.tabs.create is missing
+    delete (global.chrome.tabs as any).create;
+    const windowOpenSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+
+    fireEvent.click(openStremioBtn);
+    expect(windowOpenSpy).toHaveBeenCalledWith("https://web.stremio.com/#/continuewatching", "_blank");
+
+    windowOpenSpy.mockRestore();
+    global.chrome = originalChrome;
+    Object.defineProperty(window, "location", { value: originalLocation, writable: true });
+  });
+
+  it("should fallback to window.open when openOptionsPage and tabs.create are missing on full page click", () => {
+    const originalChrome = global.chrome;
+    global.chrome = {
+      runtime: {
+        getURL: vi.fn().mockReturnValue("chrome-extension://id/options.html"),
+        onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
+      },
+    } as any;
+
+    const windowOpenSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+
+    render(<Dashboard />);
+
+    const fullPageBtn = screen.queryByTitle("Open full page");
+    if (fullPageBtn) {
+      fireEvent.click(fullPageBtn);
+      expect(windowOpenSpy).toHaveBeenCalledWith("options.html", "_blank");
+    }
+
+    windowOpenSpy.mockRestore();
+    global.chrome = originalChrome;
+  });
 });
