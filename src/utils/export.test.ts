@@ -85,4 +85,32 @@ describe("Exporters", () => {
     // e.g. ... ,,,
     expect(lines[1]).toContain("tt9999999,Unknown,movie,,,,");
   });
+
+  it("should sanitize fields starting with formula characters to prevent CSV injection", () => {
+    const formulaEvents: PlaybackEvent[] = [
+      {
+        imdb_id: "=1+1",
+        title: "+CMD|' /C calc'!A0",
+        type: "movie",
+        started_at: "2026-07-25T22:31:00.000Z",
+        finished_at: "2026-07-25T23:31:00.000Z",
+        progress: 100,
+        watch_count: 1,
+        duration: 0,
+        time_watched: 0,
+        episode_title: "-10 @SUM(1,2)",
+        genres: ["\tTabbed"],
+        directors: ["\rCarriage"]
+      }
+    ];
+
+    const csvStr = convertToCSV(formulaEvents);
+    const lines = csvStr.split("\n");
+
+    expect(lines[1]).toContain("'=1+1");
+    expect(lines[1]).toContain("'+CMD|' /C calc'!A0");
+    expect(lines[1]).toContain("'-10 @SUM(1,2)");
+    expect(lines[1]).toContain("'\tTabbed");
+    expect(lines[1]).toContain("'\rCarriage");
+  });
 });
