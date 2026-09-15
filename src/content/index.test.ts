@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { needsRepair, injectInsightsSidebar, runSyncPipeline } from "./index";
+import { needsRepair, injectInsightsSidebar, runSyncPipeline, mapConcurrent } from "./index";
 import { CONTENT_TYPE_MOVIE, CONTENT_TYPE_SERIES, GENRE_HISTORICAL, RELEASE_YEAR_UNKNOWN } from "../utils/constants";
 import { useInsightsStore } from "../hooks/useInsightsStore";
 
@@ -9,6 +9,44 @@ global.ResizeObserver = class ResizeObserver {
   unobserve() {}
   disconnect() {}
 };
+
+describe("mapConcurrent", () => {
+  it("should process items with concurrency limit and preserve order", async () => {
+    const items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    let activeCount = 0;
+    let maxActiveCount = 0;
+
+    const results = await mapConcurrent(items, 3, async (item) => {
+      activeCount++;
+      if (activeCount > maxActiveCount) {
+        maxActiveCount = activeCount;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      activeCount--;
+      return item * 2;
+    });
+
+    expect(results).toEqual([2, 4, 6, 8, 10, 12, 14, 16, 18, 20]);
+    expect(maxActiveCount).toBeLessThanOrEqual(3);
+  });
+
+  it("should handle empty array", async () => {
+    const results = await mapConcurrent([], 5, async (x) => x);
+    expect(results).toEqual([]);
+  });
+
+  it("should handle limit greater than array length", async () => {
+    const items = [10, 20];
+    const results = await mapConcurrent(items, 10, async (x) => x + 1);
+    expect(results).toEqual([11, 21]);
+  });
+
+  it("should handle default or invalid concurrency limit gracefully", async () => {
+    const items = [1, 2, 3];
+    const results = await mapConcurrent(items, 0, async (x) => x * 10);
+    expect(results).toEqual([10, 20, 30]);
+  });
+});
 
 describe("needsRepair", () => {
   it("should return true if item is falsy", () => {
