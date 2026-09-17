@@ -48,12 +48,10 @@ export const Dashboard: React.FC = () => {
 
     // Auto-sync if running inside extension popup when a Stremio tab is present
     if (isPopup) {
-      console.log("[SYNC]\nPopup opened");
       if (typeof chrome !== "undefined" && chrome.tabs) {
         chrome.tabs.query({ url: "https://web.stremio.com/*" }, (tabs) => {
           if (tabs && tabs.length > 0) {
             setIsStremioTabActive(true);
-            console.log("[SYNC]\nStremio tab found. Starting background sync...");
             if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
               chrome.storage.local.get(["stremio_auth_key"], async (res) => {
                 const key = res.stremio_auth_key || "";
@@ -69,7 +67,6 @@ export const Dashboard: React.FC = () => {
               });
             }
           } else {
-            console.log("[SYNC]\nNo Stremio tab found.");
             setIsStremioTabActive(false);
           }
         });
@@ -79,7 +76,6 @@ export const Dashboard: React.FC = () => {
     // Listen for real-time synchronization updates
     const handleMessage = (msg: any) => {
       if (msg && msg.type === "DATA_SYNCHRONIZED") {
-        console.log("[Stremio Insights Popup] Received DATA_SYNCHRONIZED. Refreshing statistics...");
         fetchData();
       }
     };
