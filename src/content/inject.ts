@@ -1,6 +1,8 @@
 // MAIN world content script
 // Used to intercept native fetch/XHR calls that happen in the main page context
 
+import { logger } from "../utils/logger";
+
 const originalFetch = window.fetch;
 window.fetch = async function (input, init) {
   const url = typeof input === "string" ? input : (input instanceof Request ? input.url : "");
@@ -29,13 +31,13 @@ window.fetch = async function (input, init) {
 
       return response;
     } catch (e) {
-      console.error("[Stremio Insights] Error intercepting fetch:", e);
+      logger.error("Error intercepting fetch:", e);
     }
   }
 
   return originalFetch.apply(this, [input, init]);
 };
 
-console.log("[Stremio Insights] MAIN world fetch interceptor injected successfully.");
+logger.info("MAIN world fetch interceptor injected successfully.");
 
 export {};

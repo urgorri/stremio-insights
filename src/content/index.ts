@@ -12,6 +12,14 @@ import {
 
 console.log("[SYNC] Content Script loaded.");
 
+function logSyncError(message: string, error?: unknown): void {
+  if (error !== undefined) {
+    console.error(message, error);
+  } else {
+    console.error(message);
+  }
+}
+
 interface SyncStats {
   apiCallsCount: number;
   cinemetaEnrichedCount: number;
@@ -280,7 +288,7 @@ export async function runSyncPipeline() {
       const profile = JSON.parse(profileStr);
       authKey = profile?.auth?.key || "";
     } catch (e) {
-      console.error("[SYNC] Error parsing profile JSON:", e);
+      logSyncError("[SYNC] Error parsing profile JSON:", e);
       return;
     }
 
@@ -299,7 +307,7 @@ export async function runSyncPipeline() {
     });
 
     if (!metaResponse.ok) {
-      console.error("[SYNC] Failed to fetch datastoreMeta.");
+      logSyncError("[SYNC] Failed to fetch datastoreMeta.");
       return;
     }
 
@@ -365,7 +373,7 @@ export async function runSyncPipeline() {
         datastoreGetList.push(...list2);
       }
     } catch (err) {
-      console.error("[SYNC] Failed to fetch datastoreGet gracefully:", err);
+      logSyncError("[SYNC] Failed to fetch datastoreGet gracefully:", err);
     }
 
     // Build map of datastoreGet: imdbId -> item
@@ -511,7 +519,7 @@ export async function runSyncPipeline() {
           }
           return { imdbId, meta };
         } catch (err) {
-          console.error(`[SYNC] Error fetching metadata for ${imdbId}:`, err);
+          logSyncError(`[SYNC] Error fetching metadata for ${imdbId}:`, err);
           return { imdbId, meta: null };
         }
       })
@@ -746,7 +754,7 @@ export function injectInsightsSidebar() {
     if (isOpening) {
       console.log("[SYNC] Sidebar opened, starting sync pipeline...");
       useInsightsStore.getState().performSync("").catch((err) => {
-        console.error("[SYNC] Sync pipeline failed on sidebar open:", err);
+        logSyncError("[SYNC] Sync pipeline failed on sidebar open:", err);
       });
     }
   });
@@ -786,7 +794,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: true, count: 1 });
       })
       .catch((err: any) => {
-        console.error("[SYNC] Manual rescan failed:", err);
+        logSyncError("[SYNC] Manual rescan failed:", err);
         sendResponse({ success: false, error: err.message });
       });
     return true;
