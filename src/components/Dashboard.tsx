@@ -23,6 +23,17 @@ import {
   Maximize2
 } from "lucide-react";
 
+/**
+ * Helper function to select Tailwind color classes based on watch count frequency.
+ */
+export const getHeatmapCellColorClass = (count: number): string => {
+  if (count >= 10) return "bg-purple-400 shadow-[0_0_4px_#a855f7]";
+  if (count >= 6) return "bg-purple-500/80";
+  if (count >= 3) return "bg-purple-700/60";
+  if (count > 0) return "bg-purple-900/40 border border-purple-800/20";
+  return "bg-gray-800/20";
+};
+
 export const Dashboard: React.FC = () => {
   const {
     stats,
@@ -662,12 +673,7 @@ export const Dashboard: React.FC = () => {
                         const cell = heatmapMap.get(`${monthNum}-${dayNum}`);
                         const count = cell?.count || 0;
 
-                        // Select color depth based on watch frequency
-                        let bgClass = "bg-gray-800/20";
-                        if (count > 0 && count < 3) bgClass = "bg-purple-900/40 border border-purple-800/20";
-                        else if (count >= 3 && count < 6) bgClass = "bg-purple-700/60";
-                        else if (count >= 6 && count < 10) bgClass = "bg-purple-500/80";
-                        else if (count >= 10) bgClass = "bg-purple-400 shadow-[0_0_4px_#a855f7]";
+                        const bgClass = getHeatmapCellColorClass(count);
 
                         // Tooltip info
                         const monthsNames = [

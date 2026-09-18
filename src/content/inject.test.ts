@@ -4,6 +4,7 @@ describe("window.fetch interceptor", () => {
   let originalFetch: typeof window.fetch;
   let dispatchEventSpy: any;
   let consoleErrorSpy: any;
+  let consoleLogSpy: any;
 
   beforeEach(() => {
     // Setup initial state before module import or execution
@@ -16,6 +17,7 @@ describe("window.fetch interceptor", () => {
 
     dispatchEventSpy = vi.spyOn(window, "dispatchEvent");
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
     // Clear module cache to re-execute inject.ts side-effects (window.fetch override)
     vi.resetModules();
@@ -32,6 +34,7 @@ describe("window.fetch interceptor", () => {
   it("should inject successfully and override window.fetch", async () => {
     await injectInterceptor();
     expect(window.fetch).not.toBe(originalFetch);
+    expect(consoleLogSpy).toHaveBeenCalledWith("[Stremio Insights] MAIN world fetch interceptor injected successfully.");
   });
 
   it("should pass through normal requests without modification", async () => {
@@ -126,7 +129,7 @@ describe("window.fetch interceptor", () => {
     );
   });
 
-  it("should catch errors in interceptor and fallback to original request silently (logged to console)", async () => {
+  it("should catch errors in interceptor and fallback to original request silently (logged via logger.error)", async () => {
     await injectInterceptor();
 
     const requestBody = "invalid-json"; // This string will be parsed by JSON.parse because body is string but it's invalid

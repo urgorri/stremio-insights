@@ -109,18 +109,14 @@ async function handleInitializeTab(sendResponse: (response: any) => void) {
   try {
     const tab = await findStremioTab();
     if (!tab || !tab.id) {
-      console.log("[STREMIO]\nTab found: false");
       sendResponse({ success: false, error: "Stremio tab not found." });
       return;
     }
     const tabId = tab.id;
-    console.log("[STREMIO]\nTab found: true");
 
     const initiallyReady = await isStremioTabReady(tabId);
-    console.log(`[STREMIO]\nContent script ready: ${initiallyReady}`);
 
     if (!initiallyReady) {
-      console.log("[STREMIO]\nInjecting content script...");
       await injectContentScripts(tabId);
 
       // Verify with handshake retries
@@ -135,7 +131,6 @@ async function handleInitializeTab(sendResponse: (response: any) => void) {
       }
 
       if (handshakeSuccessful) {
-        console.log("[STREMIO]\nHandshake successful");
         sendResponse({ success: true, status: "ready" });
       } else {
         console.error("[STREMIO]\nHandshake failed after injection");
@@ -170,18 +165,14 @@ async function handleStartSync(sendResponse: (response: any) => void) {
   try {
     const tab = await findStremioTab();
     if (!tab || !tab.id) {
-      console.log("[STREMIO]\nTab found: false");
       sendResponse({ success: false, error: "No active Stremio tab found." });
       return;
     }
     const tabId = tab.id;
-    console.log("[STREMIO]\nTab found: true");
 
     let ready = await isStremioTabReady(tabId);
-    console.log(`[STREMIO]\nContent script ready: ${ready}`);
 
     if (!ready) {
-      console.log("[STREMIO]\nInjecting content script...");
       await injectContentScripts(tabId);
 
       // Verify with handshake retries
@@ -200,10 +191,7 @@ async function handleStartSync(sendResponse: (response: any) => void) {
         sendResponse({ success: false, error: "Handshake failed after injection." });
         return;
       }
-      console.log("[STREMIO]\nHandshake successful");
     }
-
-    console.log("[STREMIO]\nSync started");
 
     // Send FORCE_RESCAN via background channel to Stremio tab
     chrome.tabs.sendMessage(tabId, { type: "FORCE_RESCAN" }, (response) => {
