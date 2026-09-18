@@ -149,6 +149,9 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
   getFilteredEvents: () => {
     const { playbackEvents, searchQuery, filters } = get();
 
+    const targetGenre = filters.genre ? filters.genre.toLowerCase() : "";
+    const q = searchQuery ? searchQuery.toLowerCase() : "";
+
     return playbackEvents.filter((event) => {
       // 1. Type filter
       if (filters.type !== "all" && event.type !== filters.type) {
@@ -156,9 +159,9 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
       }
 
       // 2. Genre filter
-      if (filters.genre) {
+      if (targetGenre) {
         const hasGenre = event.genres?.some(
-          (g) => g.toLowerCase() === filters.genre.toLowerCase()
+          (g) => g.toLowerCase() === targetGenre
         );
         if (!hasGenre) return false;
       }
@@ -172,8 +175,7 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
       }
 
       // 4. Free-text search query (Title, IMDb ID, Genre, Year)
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
+      if (q) {
         const matchesTitle = event.title.toLowerCase().includes(q);
         const matchesImdb = (event.imdbId || event.imdb_id || "").toLowerCase().includes(q);
         const matchesGenre = event.genres?.some((g) => g.toLowerCase().includes(q)) ?? false;

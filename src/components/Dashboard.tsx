@@ -36,6 +36,7 @@ export const getHeatmapCellColorClass = (count: number): string => {
 
 export const Dashboard: React.FC = () => {
   const {
+    playbackEvents,
     stats,
     searchQuery,
     filters,
@@ -125,8 +126,35 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const filteredEvents = getFilteredEvents();
-  const timeline = groupEventsIntoTimeline(filteredEvents);
+  const filteredEvents = useMemo(
+    () => getFilteredEvents(),
+    [playbackEvents, searchQuery, filters, getFilteredEvents]
+  );
+  const timeline = useMemo(() => groupEventsIntoTimeline(filteredEvents), [filteredEvents]);
+
+  // Pre-sort timeline years and months to avoid expensive Object.entries and sorting in render loop
+  const sortedTimeline = useMemo(() => {
+    const months = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+    const monthIndexMap: Record<string, number> = months.reduce((acc, m, idx) => {
+      acc[m] = idx;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return Object.entries(timeline)
+      .sort(([yearA], [yearB]) => Number(yearB) - Number(yearA))
+      .map(([year, monthsObj]) => {
+        const sortedMonths = Object.entries(monthsObj).sort(
+          ([monthA], [monthB]) => (monthIndexMap[monthB] ?? -1) - (monthIndexMap[monthA] ?? -1)
+        );
+        return {
+          year,
+          sortedMonths
+        };
+      });
+  }, [timeline]);
 
   // Pre-compute heatmap map for O(1) lookups
   const heatmapMap = useMemo(() => {
@@ -438,33 +466,23 @@ export const Dashboard: React.FC = () => {
 
             {/* Timeline Tree rendering */}
             <div className="space-y-4">
-              {Object.keys(timeline).length === 0 ? (
+              {sortedTimeline.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 text-xs">
                   No playback sessions found matching criteria.
                 </div>
               ) : (
-                Object.entries(timeline)
-                  .sort(([yearA], [yearB]) => Number(yearB) - Number(yearA))
-                  .map(([year, monthsObj]) => {
-                    const months = [
-                      "January", "February", "March", "April", "May", "June",
-                      "July", "August", "September", "October", "November", "December"
-                    ];
-                    const sortedMonths = Object.entries(monthsObj).sort(
-                      ([monthA], [monthB]) => months.indexOf(monthB) - months.indexOf(monthA)
-                    );
-                    return (
-                      <div key={year} className="space-y-2">
-                        <h2 className="text-sm font-black text-purple-400 border-b border-purple-500/20 pb-0.5 tracking-wider">
-                          {year}
-                        </h2>
-                        <div className="space-y-3">
-                          {sortedMonths.map(([month, events]) => (
-                            <div key={month} className="space-y-1.5">
-                              <h3 className="text-xs font-bold text-blue-400/90 tracking-wide uppercase">
-                                {month}
-                              </h3>
-                              <div className="pl-2 border-l border-gray-800 space-y-2">
+                sortedTimeline.map(({ year, sortedMonths }) => (
+                  <div key={year} className="space-y-2">
+                    <h2 className="text-sm font-black text-purple-400 border-b border-purple-500/20 pb-0.5 tracking-wider">
+                      {year}
+                    </h2>
+                    <div className="space-y-3">
+                      {sortedMonths.map(([month, events]) => (
+                        <div key={month} className="space-y-1.5">
+                          <h3 className="text-xs font-bold text-blue-400/90 tracking-wide uppercase">
+                            {month}
+                          </h3>
+                          <div className="pl-2 border-l border-gray-800 space-y-2">
                             {events.map((event, index) => {
                               const watchTs = event.lastWatched || event.firstWatched || event.finished_at || event.started_at;
                               const formattedWatchDate = watchTs ? formatBuenosAiresDateOnly(watchTs) : "Unknown";
@@ -524,8 +542,7 @@ export const Dashboard: React.FC = () => {
                       ))}
                     </div>
                   </div>
-                );
-              })
+                ))
               )}
             </div>
           </div>
