@@ -32,13 +32,10 @@ export interface AnalyticsSummary extends WatchStats {
 }
 
 export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
-  const movies = library.filter(item => item.type === "movie");
-  const series = library.filter(item => item.type === "series");
-
   // Basic WatchStats fields
   const stats: WatchStats = {
-    totalMovies: movies.length,
-    totalSeries: series.length,
+    totalMovies: 0,
+    totalSeries: 0,
     totalWatchCount: 0,
     estimatedWatchTime: 0,
     favoriteGenres: [],
@@ -53,6 +50,7 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
   const yearCounts: Record<string, number> = {};
   const decadeCounts: Record<string, number> = {};
   const titleCounts: Record<string, { count: number; type: string }> = {};
+  const moviesPerMonth: Record<string, number> = {};
 
   // Find firstRecorded by finding the minimum first watch time
   // And also precompute watch time to optimize sorting
@@ -90,6 +88,20 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
   const libraryYearCounts: Record<number, number> = {};
 
   library.forEach(item => {
+    if (item.type === "movie") {
+      stats.totalMovies++;
+      const ts = getWatchTime(item);
+      if (ts) {
+        const d = new Date(ts);
+        if (!isNaN(d.getTime())) {
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+          moviesPerMonth[key] = (moviesPerMonth[key] || 0) + 1;
+        }
+      }
+    } else if (item.type === "series") {
+      stats.totalSeries++;
+    }
+
     stats.totalWatchCount += (item.watch_count || 1);
     stats.estimatedWatchTime += (item.time_watched || 0);
 
@@ -161,18 +173,6 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
     ? (ratedItems.reduce((sum, item) => sum + parseFloat(item.imdbRating!), 0) / ratedItems.length).toFixed(1)
     : "0.0";
 
-  // Movies watched per month
-  const moviesPerMonth: Record<string, number> = {};
-  movies.forEach(item => {
-    const ts = getWatchTime(item);
-    if (ts) {
-      const d = new Date(ts);
-      if (!isNaN(d.getTime())) {
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-        moviesPerMonth[key] = (moviesPerMonth[key] || 0) + 1;
-      }
-    }
-  });
 
   // Heatmap: Month of year vs Day of month (12 x 31) only for current year
   const heatmap: { month: number; day: number; count: number }[] = [];
@@ -241,25 +241,38 @@ export function computeAnalytics(library: PlaybackEvent[]): AnalyticsSummary {
 }
 
 export function groupEventsIntoTimeline(events: PlaybackEvent[]): Record<string, Record<string, PlaybackEvent[]>> {
-  const sorted = [...events].sort((a, b) => getWatchTime(b) - getWatchTime(a));
-  const timeline: Record<string, Record<string, PlaybackEvent[]>> = {};
+  const intermediate: Record<string, Record<string, { event: PlaybackEvent; ts: number }[]>> = {};
 
-  for (const event of sorted) {
+  for (let i = 0; i < events.length; i++) {
+    const event = events[i];
     const ts = getWatchTime(event);
     if (!ts) continue;
+
     const d = new Date(ts);
     if (isNaN(d.getTime())) continue;
 
     const year = String(d.getFullYear());
     const month = MONTHS[d.getMonth()];
 
-    if (!timeline[year]) {
-      timeline[year] = {};
+    if (!intermediate[year]) {
+      intermediate[year] = {};
     }
-    if (!timeline[year][month]) {
-      timeline[year][month] = [];
+    if (!intermediate[year][month]) {
+      intermediate[year][month] = [];
     }
-    timeline[year][month].push(event);
+    intermediate[year][month].push({ event, ts });
+  }
+
+  const timeline: Record<string, Record<string, PlaybackEvent[]>> = {};
+
+  for (const year in intermediate) {
+    timeline[year] = {};
+    const yearObj = intermediate[year];
+    for (const month in yearObj) {
+      const items = yearObj[month];
+      items.sort((a, b) => b.ts - a.ts);
+      timeline[year][month] = items.map(x => x.event);
+    }
   }
 
   return timeline;

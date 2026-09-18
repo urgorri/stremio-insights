@@ -26,6 +26,14 @@ interface InsightsState {
   getFilteredEvents: () => PlaybackEvent[];
 }
 
+const isChromeStorageAvailable = (): boolean => {
+  return typeof chrome !== "undefined" && Boolean(chrome.storage?.local);
+};
+
+const isChromeRuntimeAvailable = (): boolean => {
+  return typeof chrome !== "undefined" && Boolean(chrome.runtime?.sendMessage);
+};
+
 export const useInsightsStore = create<InsightsState>((set, get) => ({
   playbackEvents: [],
   stats: null,
@@ -40,7 +48,7 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
 
   fetchData: async () => {
     return new Promise<void>((resolve) => {
-      if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.local) {
+      if (!isChromeStorageAvailable()) {
         console.warn("[Stremio Insights] Chrome Extension context not found. Using empty stub data.");
         set({
           playbackEvents: [],
@@ -81,7 +89,7 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
         return;
       }
 
-      if (typeof chrome === "undefined" || !chrome.runtime || !chrome.runtime.sendMessage) {
+      if (!isChromeRuntimeAvailable()) {
         const err = new Error("Service worker unavailable.");
         set({ syncLoading: false, syncError: err.message });
         reject(err);
@@ -117,7 +125,7 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
 
   clearHistory: async () => {
     return new Promise<void>((resolve) => {
-      if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.local) {
+      if (!isChromeStorageAvailable()) {
         resolve();
         return;
       }
@@ -141,6 +149,9 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
   getFilteredEvents: () => {
     const { playbackEvents, searchQuery, filters } = get();
 
+    const targetGenre = filters.genre ? filters.genre.toLowerCase() : "";
+    const q = searchQuery ? searchQuery.toLowerCase() : "";
+
     return playbackEvents.filter((event) => {
       // 1. Type filter
       if (filters.type !== "all" && event.type !== filters.type) {
@@ -148,9 +159,9 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
       }
 
       // 2. Genre filter
-      if (filters.genre) {
+      if (targetGenre) {
         const hasGenre = event.genres?.some(
-          (g) => g.toLowerCase() === filters.genre.toLowerCase()
+          (g) => g.toLowerCase() === targetGenre
         );
         if (!hasGenre) return false;
       }
@@ -164,8 +175,7 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
       }
 
       // 4. Free-text search query (Title, IMDb ID, Genre, Year)
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
+      if (q) {
         const matchesTitle = event.title.toLowerCase().includes(q);
         const matchesImdb = (event.imdbId || event.imdb_id || "").toLowerCase().includes(q);
         const matchesGenre = event.genres?.some((g) => g.toLowerCase().includes(q)) ?? false;

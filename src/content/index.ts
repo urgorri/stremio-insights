@@ -12,6 +12,14 @@ import {
 
 console.log("[SYNC] Content Script loaded.");
 
+function logSyncError(message: string, error?: unknown): void {
+  if (error !== undefined) {
+    console.error(message, error);
+  } else {
+    console.error(message);
+  }
+}
+
 interface SyncStats {
   apiCallsCount: number;
   cinemetaEnrichedCount: number;
@@ -140,7 +148,7 @@ function applyOmdbFallback(omdbData: any, ctx: MetadataContext): void {
   }
 }
 
-async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", title: string, stats: SyncStats): Promise<any> {
+async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", title: string, stats: SyncStats, omdbApiKey?: string): Promise<any> {
   const cleanId = imdbId.split(":")[0];
   const urlType = type === "series" ? "series" : "movie";
 
@@ -198,8 +206,7 @@ async function fetchEnrichedMetadata(imdbId: string, type: "movie" | "series", t
   const cinemetaPromise = fetchCinemeta(cleanId, urlType, stats, ctx);
 
   const omdbPromise = (async () => {
-    const storage = await chrome.storage.local.get(["omdb_api_key"]);
-    const apiKey = storage.omdb_api_key;
+    const apiKey = omdbApiKey;
     if (!apiKey) return null;
     stats.apiCallsCount++;
     try {
@@ -281,7 +288,7 @@ export async function runSyncPipeline() {
       const profile = JSON.parse(profileStr);
       authKey = profile?.auth?.key || "";
     } catch (e) {
-      console.error("[SYNC] Error parsing profile JSON:", e);
+      logSyncError("[SYNC] Error parsing profile JSON:", e);
       return;
     }
 
@@ -300,7 +307,7 @@ export async function runSyncPipeline() {
     });
 
     if (!metaResponse.ok) {
-      console.error("[SYNC] Failed to fetch datastoreMeta.");
+      logSyncError("[SYNC] Failed to fetch datastoreMeta.");
       return;
     }
 
@@ -366,7 +373,7 @@ export async function runSyncPipeline() {
         datastoreGetList.push(...list2);
       }
     } catch (err) {
-      console.error("[SYNC] Failed to fetch datastoreGet gracefully:", err);
+      logSyncError("[SYNC] Failed to fetch datastoreGet gracefully:", err);
     }
 
     // Build map of datastoreGet: imdbId -> item
@@ -421,8 +428,9 @@ export async function runSyncPipeline() {
     }
 
     // Get existing storage for merging & repair rules
-    const storage = await chrome.storage.local.get(["library", "metadata_cache"]);
+    const storage = await chrome.storage.local.get(["library", "metadata_cache", "omdb_api_key"]);
     const existingLibrary = Array.isArray(storage.library) ? storage.library : [];
+    const omdbApiKey = storage.omdb_api_key;
     const existingMap = new Map<string, any>();
     existingLibrary.forEach(item => {
       if (item && item.imdbId) {
@@ -499,7 +507,7 @@ export async function runSyncPipeline() {
 
         const title = getMeta?.name || `Unknown (${imdbId})`;
         try {
-          const meta = await fetchEnrichedMetadata(imdbId, type, title, stats);
+          const meta = await fetchEnrichedMetadata(imdbId, type, title, stats, omdbApiKey);
           // Only cache if the fetched metadata has some actual content (e.g., is not empty/failed)
           const isFailedFetch = !meta || ((meta.genres || []).length === 1 && meta.genres[0] === "Historical" && !meta.director && meta.releaseYear === "Unknown");
           if (meta && !isFailedFetch) {
@@ -511,7 +519,7 @@ export async function runSyncPipeline() {
           }
           return { imdbId, meta };
         } catch (err) {
-          console.error(`[SYNC] Error fetching metadata for ${imdbId}:`, err);
+          logSyncError(`[SYNC] Error fetching metadata for ${imdbId}:`, err);
           return { imdbId, meta: null };
         }
       })
@@ -746,7 +754,7 @@ export function injectInsightsSidebar() {
     if (isOpening) {
       console.log("[SYNC] Sidebar opened, starting sync pipeline...");
       useInsightsStore.getState().performSync("").catch((err) => {
-        console.error("[SYNC] Sync pipeline failed on sidebar open:", err);
+        logSyncError("[SYNC] Sync pipeline failed on sidebar open:", err);
       });
     }
   });
@@ -786,7 +794,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: true, count: 1 });
       })
       .catch((err: any) => {
-        console.error("[SYNC] Manual rescan failed:", err);
+        logSyncError("[SYNC] Manual rescan failed:", err);
         sendResponse({ success: false, error: err.message });
       });
     return true;
