@@ -26,6 +26,14 @@ interface InsightsState {
   getFilteredEvents: () => PlaybackEvent[];
 }
 
+const isChromeStorageAvailable = (): boolean => {
+  return typeof chrome !== "undefined" && Boolean(chrome.storage?.local);
+};
+
+const isChromeRuntimeAvailable = (): boolean => {
+  return typeof chrome !== "undefined" && Boolean(chrome.runtime?.sendMessage);
+};
+
 export const useInsightsStore = create<InsightsState>((set, get) => ({
   playbackEvents: [],
   stats: null,
@@ -40,7 +48,7 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
 
   fetchData: async () => {
     return new Promise<void>((resolve) => {
-      if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.local) {
+      if (!isChromeStorageAvailable()) {
         console.warn("[Stremio Insights] Chrome Extension context not found. Using empty stub data.");
         set({
           playbackEvents: [],
@@ -81,7 +89,7 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
         return;
       }
 
-      if (typeof chrome === "undefined" || !chrome.runtime || !chrome.runtime.sendMessage) {
+      if (!isChromeRuntimeAvailable()) {
         const err = new Error("Service worker unavailable.");
         set({ syncLoading: false, syncError: err.message });
         reject(err);
@@ -117,7 +125,7 @@ export const useInsightsStore = create<InsightsState>((set, get) => ({
 
   clearHistory: async () => {
     return new Promise<void>((resolve) => {
-      if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.local) {
+      if (!isChromeStorageAvailable()) {
         resolve();
         return;
       }
